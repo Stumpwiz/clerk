@@ -81,14 +81,14 @@ export default function LetterManagement() {
 
   return (
     <div className="space-y-8">
+      <LetterGenerationForm onGenerate={handleGenerate} />
+      
       {template && (
         <TemplateEditor
           template={template}
           onUpdate={handleTemplateUpdate}
         />
       )}
-      
-      <LetterGenerationForm onGenerate={handleGenerate} />
       
       <PDFList pdfs={pdfs} onDelete={handleDelete} />
     </div>
