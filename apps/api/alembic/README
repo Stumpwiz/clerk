@@ -1,0 +1,6 @@
+This directory contains Alembic migration environment and scripts.
+
+Commands to use (run from apps/api with virtualenv activated):
+
+  alembic revision --autogenerate -m "Initial schema - body, office, person, term, letters"
+  alembic upgrade head
