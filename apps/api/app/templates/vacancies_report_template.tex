@@ -1,0 +1,53 @@
+\%{ Jinja2 Template for Vacancies Report }
+\%{ Uses custom delimiters: \VAR for variables, \BLOCK for control }
+\%{ Variables: generated, title, grouped or vacancies list as context }
+\%{ See docs/TEMPLATE_SYSTEM.md for full documentation }
+\documentclass[12pt,twoside]{article}
+\usepackage{lastpage}
+\usepackage{sectsty}
+\usepackage[top=0.65in, bottom=0.75in, left=0.75in, right=0.75in]{geometry}
+\usepackage{titlesec}
+\usepackage{datetime}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{multicol}
+
+\titleformat{\section}{\normalfont\Large\bfseries}{}{0pt}{}
+
+\pagestyle{fancy}
+\fancyhead{}
+\newcommand{\version}{Generated \VAR{generated}}
+\newcommand{\footerLine}{\small \version}
+\fancyfoot[ROF,LEF]{\thepage}
+\fancyfoot[LOF,REF]{\footerLine}
+\fancyfoot[COF,CEF]{}
+\renewcommand{\headrulewidth}{0.0pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\allsectionsfont{\centering}
+
+\begin{document}
+	\raggedbottom
+	\begin{center}
+		\includegraphics{../static/residentCouncilLogoSmall} \\
+		\vspace{0.5em}
+		{\LARGE \textbf{\VAR{title}}}
+	\end{center}
+\begin{multicols}{2}
+\BLOCK{ for grp in vacancies | groupby('body_name') }
+
+\vspace{0.5em}
+\section*{\VAR{grp.grouper}}
+\begin{center}
+	\small
+	\begin{tabular}{ll}
+		\textbf{Office} & \textbf{Incumbent} \\
+		\hline
+		\BLOCK{ for item in grp.list }
+		\VAR{item.office_title} &  \\
+		\BLOCK{ endfor }
+	\end{tabular}
+\end{center}
+
+\BLOCK{ endfor }
+\end{multicols}
+\end{document}

@@ -40,6 +40,17 @@ class Settings(BaseSettings):
     # Letter generation
     xelatex_path: str = Field(default="xelatex", validation_alias=AliasChoices("XELATEX_PATH", "xelatex_path"))
     pdf_output_dir: str = Field(default="files_letters", validation_alias=AliasChoices("PDF_OUTPUT_DIR", "pdf_output_dir"))
+    roster_output_dir: str = Field(
+        default="files_roster_reports",
+        description="Directory for generated roster PDFs"
+    )
+
+    # Templates use Jinja2 with custom delimiters <% %> for blocks and << >> for variables to avoid conflicts with LaTeX syntax
+    # Path is relative to the API app directory (apps/api/)
+    templates_dir: str = Field(
+        default="app/templates",
+        description="Directory containing LaTeX Jinja2 templates for rosters and reports"
+    )
 
     # Deprecated/optional Clerk fields (issuer will be determined dynamically from tokens)
     CLERK_JWKS_URL: Optional[str] = None

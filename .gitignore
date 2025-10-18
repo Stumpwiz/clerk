@@ -365,3 +365,15 @@ finale/.dockerignore
 # Generated PDF letters
 apps/api/files_letters/*.pdf
 apps/api/files_letters/*.tex
+
+
+# Generated roster/report PDFs and LaTeX sources
+apps/api/files_roster_reports/*.pdf
+apps/api/files_roster_reports/*.tex
+
+# Local SQLite databases (API)
+apps/api/*.db
+apps/api/**/*.db-journal
+
+# Log files under API
+apps/api/**/*.log

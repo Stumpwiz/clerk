@@ -1,0 +1,61 @@
+\%{ Jinja2 Template for Long Form Roster }
+\%{ Uses custom delimiters: \VAR for variables, \BLOCK for control }
+\%{ Variables: generated, title, grouped (list of bodies with offices and people) }
+\%{ See docs/TEMPLATE_SYSTEM.md for full documentation }
+\documentclass[12pt,twoside]{article}
+\usepackage{lastpage}
+\usepackage{sectsty}
+\usepackage[top=0.65in, bottom=0.75in, left=0.75in, right=0.75in]{geometry}
+\usepackage{titlesec}
+\usepackage{datetime}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{array}
+
+\titleformat{\section}{\normalfont\Large\bfseries}{}{0pt}{}
+
+\pagestyle{fancy}
+\fancyhead{}
+\newcommand{\version}{Generated \VAR{generated}}
+\newcommand{\footerLine}{\small \version}
+\fancyfoot[ROF,LEF]{\thepage}
+\fancyfoot[LOF,REF]{\footerLine}
+\fancyfoot[COF,CEF]{}
+\renewcommand{\headrulewidth}{0.0pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\allsectionsfont{\centering}
+
+\begin{document}
+\raggedbottom
+\begin{center}
+    \includegraphics{../static/residentCouncilLogoSmall} \\
+    \vspace{0.5em}
+    {\LARGE \textbf{\VAR{title}}}
+\end{center}
+
+\BLOCK{ for body in grouped }
+
+\vspace{0.5em}
+\section*{\VAR{body.body_name}}
+
+\begin{center}
+\small
+\vspace{0.5em}
+\renewcommand{\arraystretch}{1.0}
+\begin{center}
+\small
+\begin{tabular}{llllc}
+\textbf{Incumbent} & \textbf{Office} & \textbf{Email} & \textbf{Phone} & \textbf{Apt} \\
+\hline
+\BLOCK{ for office in body.offices }
+\BLOCK{ for person in office.people }
+\VAR{person.name} & \VAR{office.office_title} & \VAR{person.email} & \VAR{person.phone} & \VAR{person.apt} \\
+\BLOCK{ endfor }
+\BLOCK{ endfor }
+\end{tabular}
+\end{center}
+\end{center}
+
+\BLOCK{ endfor }
+
+\end{document}

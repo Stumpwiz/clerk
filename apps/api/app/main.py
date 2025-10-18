@@ -6,7 +6,7 @@ from app.core.config import settings
 from app.db.base import get_db
 from app.db import models  # Register models
 from app.security.auth import ClerkUser, get_current_user
-from app.api.routers import bodies, persons, reports, offices, terms, auth, users, letters
+from app.api.routers import bodies, persons, reports, offices, terms, auth, users, letters, rosters
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -32,6 +32,7 @@ app.include_router(reports.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"]) 
 app.include_router(users.router, prefix="/api/v1/users", tags=["User Management"]) 
 app.include_router(letters.router, prefix="/api/v1")
+app.include_router(rosters.router, prefix="/api/v1")
 
 @app.get("/")
 async def root():
