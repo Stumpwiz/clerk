@@ -47,6 +47,11 @@ async def root():
 async def health_check():
     return {"status": "healthy"}
 
+# Be tolerant of trailing slash for simple health checks (useful for external probes/tools)
+@app.get("/health/")
+async def health_check_slash():
+    return {"status": "healthy"}
+
 
 # Database connectivity check
 @app.get("/api/v1/db-check")

@@ -11,7 +11,7 @@ import re
 
 from ...db.base import get_db
 from ...security.auth import get_current_user, ClerkUser
-from ...services.reports_service import generate_expirations_report, generate_vacancies_report
+from ...services.reports_service import generate_expirations_report, generate_vacancies_report, _fetch_expiring_terms_current_year
 
 router = APIRouter(prefix="/reports", tags=["reports"]) 
 
@@ -26,12 +26,11 @@ def _reports_dir() -> Path:
 
 @router.post("/generate/expirations")
 async def generate_expirations_pdf(
-    days: int = Query(90, description="Number of days to look ahead"),
     db: Session = Depends(get_db),
     current_user: ClerkUser = Depends(get_current_user)
 ):
-    """Generate expirations report PDF."""
-    result = generate_expirations_report(db, days)
+    """Generate expirations report PDF for the current calendar year."""
+    result = generate_expirations_report(db)
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error", "Failed to generate expirations report"))
     return result
@@ -169,33 +168,15 @@ def vacancy_report(
 
 @router.get("/expiring-terms")
 def expiring_terms_report(
-    days: int = Query(90, description="Number of days to look ahead"),
     db: Session = Depends(get_db),
     current_user: ClerkUser = Depends(get_current_user)
 ):
-    """Generate expiring terms report"""
-    query = text(
-        """
-            SELECT 
-                person.first,
-                person.last,
-                person.email,
-                body.name as body_name,
-                office.title as office_title,
-                term.end as term_end_date
-            FROM term
-            JOIN person ON person.personid = term.termpersonid
-            JOIN office ON office.office_id = term.termofficeid
-            JOIN body ON body.body_id = office.office_body_id
-            WHERE term.end IS NOT NULL 
-                AND term.end <= date('now', '+' || :days || ' days')
-                AND term.end >= date('now')
-            ORDER BY term.end, body.body_precedence
-        """
-    )
-    result = db.execute(query, {"days": days})
-    expiring = [dict(row._mapping) for row in result]
-    return {"expiring_terms": expiring, "count": len(expiring), "days_ahead": days}
+    """Return terms expiring in the current calendar year (JSON)."""
+    try:
+        rows, report_year = _fetch_expiring_terms_current_year(db)
+        return {"expiring_terms": rows, "count": len(rows), "report_year": report_year}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to compute expiring terms: {e}")
 
 
 @router.get("/full-roster")

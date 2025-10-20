@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { clientApiCall } from "@/lib/client-api";
 import { FileText, Loader2 } from "lucide-react";
+import FileActions from "../components/file-actions";
 
 interface RosterFile {
   name: string;
@@ -188,36 +189,13 @@ export default function RostersPage() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(f.modified)}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div className="flex items-center justify-end gap-4" onClick={(e) => e.stopPropagation()}>
-                    <a
-                      href={`/api/proxy/api/v1/rosters/download/${f.name}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-900 font-medium"
-                      onClick={() => setDeletingFile(null)}
-                    >
-                      View
-                    </a>
-                    {deletingFile === f.name ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          confirmDelete(f.name);
-                        }}
-                        className="text-red-600 hover:text-red-900 font-medium cursor-pointer"
-                      >
-                        Confirm
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDeletingFile(f.name);
-                        }}
-                        className="text-red-600 hover:text-red-900 font-medium cursor-pointer"
-                      >
-                        Delete
-                      </button>
-                    )}
+                    <FileActions
+                      viewHref={`/api/proxy/api/v1/rosters/download/${encodeURIComponent(f.name)}`}
+                      isConfirming={deletingFile === f.name}
+                      onRequestDelete={() => setDeletingFile(f.name)}
+                      onConfirmDelete={() => confirmDelete(f.name)}
+                      onCancel={() => setDeletingFile(null)}
+                    />
                   </div>
                 </td>
               </tr>

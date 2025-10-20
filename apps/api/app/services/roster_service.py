@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, func
 
 from ..db.models import Term, Person, Body, Office
 from ..core.config import settings
@@ -58,14 +58,6 @@ def _get_output_dir() -> Path:
     # Create if it doesn't exist
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
-
-
-
-
-
-
-
-
 
 
 def _group_terms(rows: List[Tuple[Body, Office, Person]]) -> Dict[int, Dict[int, List[Person]]]:
@@ -113,10 +105,10 @@ def generate_roster(db: Session, roster_type: str) -> Dict[str, Any]:
             .join(Person, Person.personid == Term.termpersonid)
             .where(or_(Term.end.is_(None), Term.end >= today))
             .order_by(
-                Body.body_precedence,
-                Office.office_precedence,
-                Person.last,
-                Person.first,
+                Body.body_precedence.asc(),
+                func.coalesce(Office.office_precedence, 999999).asc(),
+                func.lower(func.coalesce(Person.first, '')).asc(),
+                func.lower(func.coalesce(Person.last, '')).asc(),
             )
         )
         result = db.execute(stmt)
@@ -148,7 +140,7 @@ def generate_roster(db: Session, roster_type: str) -> Dict[str, Any]:
         # Build template context
         context: Dict[str, Any] = {
             "generated": today.strftime('%B %d, %Y'),
-            "title": 'Long Form' if roster_type == 'long' else 'Short Form',
+            "title": 'Long Form Roster' if roster_type == 'long' else 'Short Form Roster',
             "grouped": []
         }
 

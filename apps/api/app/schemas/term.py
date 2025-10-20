@@ -1,7 +1,8 @@
 """Pydantic schemas for Term (person-to-office assignment) endpoints"""
-from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import date
+from pydantic import BaseModel, Field
+from pydantic import ConfigDict
 
 
 class TermBase(BaseModel):
@@ -23,6 +24,4 @@ class TermUpdate(BaseModel):
 
 
 class TermResponse(TermBase):
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -28,22 +28,22 @@
 \begin{document}
 	\raggedbottom
 	\begin{center}
-		\includegraphics{../static/residentCouncilLogoSmall} \\
+		\includegraphics{../static/logo.jpg} \\
 		\vspace{0.5em}
 		{\LARGE \textbf{\VAR{title}}}
 	\end{center}
 \begin{multicols}{2}
-\BLOCK{ for grp in vacancies | groupby('body_name') }
+\BLOCK{ for grp in grouped }
 
 \vspace{0.5em}
-\section*{\VAR{grp.grouper}}
+\section*{\VAR{grp.body_name}}
 \begin{center}
 	\small
 	\begin{tabular}{ll}
 		\textbf{Office} & \textbf{Incumbent} \\
 		\hline
-		\BLOCK{ for item in grp.list }
-		\VAR{item.office_title} &  \\
+		\BLOCK{ for item in grp.entries }
+		\VAR{item.office_title} & \VAR{item.incumbent} \\
 		\BLOCK{ endfor }
 	\end{tabular}
 \end{center}

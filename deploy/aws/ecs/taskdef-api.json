@@ -1,0 +1,58 @@
+{
+  "family": "clerk-api",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "${ECS_EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${ECS_TASK_ROLE_ARN}",
+  "containerDefinitions": [
+    {
+      "name": "api",
+      "image": "${ECR_API_IMAGE_URI}",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": 8000, "protocol": "tcp" }
+      ],
+      "environment": [
+        { "name": "DATABASE_URL", "value": "sqlite:////app/data/community_admin.db" },
+        { "name": "XELATEX_PATH", "value": "xelatex" },
+        { "name": "ALLOWED_ORIGINS", "value": "[\"https://your-domain.com\",\"http://localhost:3000\"]" }
+      ],
+      "secrets": [
+        { "name": "CLERK_PUBLISHABLE_KEY", "valueFrom": "${SECRET_ARN_CLERK_PUBLISHABLE_KEY}" },
+        { "name": "CLERK_SECRET_KEY", "valueFrom": "${SECRET_ARN_CLERK_SECRET_KEY}" }
+      ],
+      "mountPoints": [
+        { "sourceVolume": "efs", "containerPath": "/app/data", "readOnly": false },
+        { "sourceVolume": "efs", "containerPath": "/app/files_letters", "readOnly": false },
+        { "sourceVolume": "efs", "containerPath": "/app/files_roster_reports", "readOnly": false }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "curl -fsS http://localhost:8000/health || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 20
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-group": "/ecs/clerk-api",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ],
+  "volumes": [
+    {
+      "name": "efs",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "${EFS_FILESYSTEM_ID}",
+        "transitEncryption": "ENABLED",
+        "rootDirectory": "/"
+      }
+    }
+  ]
+}

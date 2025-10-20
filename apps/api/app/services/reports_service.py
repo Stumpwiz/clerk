@@ -87,52 +87,52 @@ def _get_reports_output_dir() -> Path:
     return output_dir
 
 
-def generate_expirations_report(db: Session, days_ahead: int = 90) -> Dict[str, Any]:
+def _fetch_expiring_terms_current_year(db: Session) -> tuple[List[Dict[str, Any]], int]:
+    """Fetch terms expiring within the current calendar year.
+
+    Excludes never-expiring sentinel date 9999-12-31 and NULLs.
+    Returns a tuple of (rows, year).
     """
-    Generate a PDF report of terms expiring within the next `days_ahead` days.
+    today = date.today()
+    year = today.year
+    begin = f"{year}-01-01"
+    end = f"{year}-12-31"
 
-    Data is queried via a raw SQL statement and rendered into a LaTeX template
-    (expirations_report_template.tex) using Jinja2 with custom delimiters.
-    The resulting .tex is compiled with xelatex to produce the PDF.
+    query = text(
+        """
+        SELECT 
+            person.first,
+            person.last,
+            person.email,
+            body.name as body_name,
+            office.title as office_title,
+            term.end as term_end_date
+        FROM term
+        JOIN person ON person.personid = term.termpersonid
+        JOIN office ON office.office_id = term.termofficeid
+        JOIN body ON body.body_id = office.office_body_id
+        WHERE term.end IS NOT NULL
+          AND term.end != date('9999-12-31')
+          AND term.end BETWEEN :begin AND :end
+        ORDER BY body.body_precedence ASC,
+                 COALESCE(office.office_precedence, 999999) ASC,
+                 lower(COALESCE(person.first, '')) ASC,
+                 lower(COALESCE(person.last, '')) ASC,
+                 term.end
+        """
+    )
+    result = db.execute(query, {"begin": begin, "end": end})
+    rows: List[Dict[str, Any]] = [dict(row._mapping) for row in result]
+    return rows, year
 
-    Args:
-        db: SQLAlchemy Session for database access.
-        days_ahead: Number of days ahead from today to include expirations.
 
-    Returns:
-        Dict with success status and filename on success:
-          {"success": True, "filename": "<pdf_name>", "type": "expirations"}
-        or an error payload on failure:
-          {"success": False, "error": "<message>"}
-
-    Raises:
-        This function catches and converts most exceptions into error dicts, but
-        may re-raise unexpected OSErrors from filesystem operations when creating
-        directories.
+def generate_expirations_report(db: Session) -> Dict[str, Any]:
+    """
+    Generate a PDF report of terms expiring in the current calendar year.
     """
     today = date.today()
     try:
-        query = text(
-            """
-            SELECT 
-                person.first,
-                person.last,
-                person.email,
-                body.name as body_name,
-                office.title as office_title,
-                term.end as term_end_date
-            FROM term
-            JOIN person ON person.personid = term.termpersonid
-            JOIN office ON office.office_id = term.termofficeid
-            JOIN body ON body.body_id = office.office_body_id
-            WHERE term.end IS NOT NULL 
-                AND term.end <= date('now', '+' || :days || ' days')
-                AND term.end >= date('now')
-            ORDER BY term.end, body.body_precedence
-            """
-        )
-        result = db.execute(query, {"days": days_ahead})
-        rows: List[Dict[str, Any]] = [dict(row._mapping) for row in result]
+        rows, report_year = _fetch_expiring_terms_current_year(db)
     except Exception as e:
         logger.exception("Failed to query expirations report data")
         return {"success": False, "error": f"Database query error: {e}"}
@@ -141,7 +141,7 @@ def generate_expirations_report(db: Session, days_ahead: int = 90) -> Dict[str, 
     try:
         context: Dict[str, Any] = {
             'generated': today.strftime('%B %d, %Y'),
-            'days_ahead': days_ahead,
+            'report_year': report_year,
             'expirations': []
         }
 
@@ -151,7 +151,7 @@ def generate_expirations_report(db: Session, days_ahead: int = 90) -> Dict[str, 
                 'email': sanitize_latex(row.get('email') or ''),
                 'body_name': sanitize_latex(row.get('body_name') or ''),
                 'office_title': sanitize_latex(row.get('office_title') or ''),
-                'term_end_date': row.get('term_end_date'),  # date object or ISO string, assumed safe
+                'term_end_date': row.get('term_end_date'),
             })
 
         template_name = 'expirations_report_template.tex'
@@ -260,13 +260,16 @@ def generate_vacancies_report(db: Session) -> Dict[str, Any]:
             SELECT 
                 body.name as body_name,
                 office.title as office_title,
-                office.office_precedence
-            FROM office
+                office.office_precedence,
+                person.first as incumbent_first
+            FROM term
+            JOIN office ON office.office_id = term.termofficeid
             JOIN body ON body.body_id = office.office_body_id
-            LEFT JOIN term ON term.termofficeid = office.office_id 
-                AND (term.end IS NULL OR term.end > date('now'))
-            WHERE term.termpersonid IS NULL
-            ORDER BY body.body_precedence, office.office_precedence
+            JOIN person ON person.personid = term.termpersonid
+            WHERE (term.end IS NULL OR term.end > date('now'))
+              AND lower(COALESCE(person.first, '')) = lower('(Vacant)')
+            ORDER BY body.body_precedence ASC,
+                     COALESCE(office.office_precedence, 999999) ASC
             """
         )
         result = db.execute(query)
@@ -276,16 +279,36 @@ def generate_vacancies_report(db: Session) -> Dict[str, Any]:
         return {"success": False, "error": f"Database query error: {e}"}
 
     try:
-        # Build template context
-        context: Dict[str, Any] = {
-            'generated': today.strftime('%B %d, %Y'),
-            'vacancies': []
-        }
+        # Build template context (include title and grouped data preserving SQL order)
+        generated_str = today.strftime('%B %d, %Y')
+
+        # Build both a flat list and a grouped structure to avoid Jinja groupby re-sorting
+        vacancies_list: List[Dict[str, Any]] = []
+        grouped: List[Dict[str, Any]] = []
+        current_body: str | None = None
+
         for row in rows:
-            context['vacancies'].append({
-                'body_name': sanitize_latex(row.get('body_name') or ''),
-                'office_title': sanitize_latex(row.get('office_title') or ''),
+            body_name = sanitize_latex(row.get('body_name') or '')
+            office_title = sanitize_latex(row.get('office_title') or '')
+            incumbent_name = sanitize_latex(row.get('incumbent_first') or '(Vacant)')
+
+            vacancies_list.append({
+                'body_name': body_name,
+                'office_title': office_title,
+                'incumbent': incumbent_name,
             })
+
+            if current_body != body_name:
+                grouped.append({'body_name': body_name, 'entries': []})
+                current_body = body_name
+            grouped[-1]['entries'].append({'office_title': office_title, 'incumbent': incumbent_name})
+
+        context: Dict[str, Any] = {
+            'generated': generated_str,
+            'title': 'Vacancies',
+            'vacancies': vacancies_list,
+            'grouped': grouped,
+        }
 
         template_name = 'vacancies_report_template.tex'
         logger.info("Rendering template: %s", template_name)

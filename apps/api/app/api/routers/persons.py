@@ -49,7 +49,22 @@ def create_person(
     current_user: AuthorizedUser = Depends(get_authorized_user)
 ):
     """Create a new person"""
-    person = Person(**person_data.model_dump())
+    data = person_data.model_dump()
+    # Defensive normalization: trim strings and coerce blank email to None
+    def _norm(s: str | None) -> str | None:
+        if s is None:
+            return None
+        t = s.strip()
+        return t or None
+
+    payload = {
+        "first": _norm(data.get("first")),
+        "last": _norm(data.get("last")),
+        "email": _norm(data.get("email")),
+        "phone": _norm(data.get("phone")),
+        "apt": _norm(data.get("apt")),
+    }
+    person = Person(**payload)
     db.add(person)
     db.commit()
     db.refresh(person)
@@ -68,9 +83,25 @@ def update_person(
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
 
-    update_data = person_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(person, field, value)
+    raw = person_data.model_dump(exclude_unset=True)
+
+    def _norm(s: str | None) -> str | None:
+        if s is None:
+            return None
+        t = s.strip()
+        return t or None
+
+    # Normalize fields if present in payload
+    if "first" in raw:
+        person.first = _norm(raw.get("first"))
+    if "last" in raw:
+        person.last = _norm(raw.get("last"))
+    if "email" in raw:
+        person.email = _norm(raw.get("email"))
+    if "phone" in raw:
+        person.phone = _norm(raw.get("phone"))
+    if "apt" in raw:
+        person.apt = _norm(raw.get("apt"))
 
     db.commit()
     db.refresh(person)

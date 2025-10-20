@@ -25,6 +25,7 @@ class Office(Base):
     title = Column(String(45))
     office_precedence = Column(Float)
     office_body_id = Column(Integer, ForeignKey("body.body_id"), nullable=False)
+    max_incumbents = Column(Integer, nullable=True)  # NULL/None means unlimited
 
     # Relationships
     body = relationship("Body", back_populates="offices")

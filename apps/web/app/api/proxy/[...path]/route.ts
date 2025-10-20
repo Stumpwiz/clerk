@@ -1,7 +1,9 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+// Prefer internal URL when running server-side (e.g., in Docker), fall back to public, then localhost
+const API_PUBLIC_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+const API_INTERNAL_BASE = process.env.API_INTERNAL_BASE_URL || API_PUBLIC_BASE;
 
 export async function GET(
   request: NextRequest,
@@ -49,30 +51,38 @@ async function handleRequest(
   method: string
 ) {
   try {
-    const authResult = await auth();
-    const token = await authResult.getToken({ template: "Default" });
-
-    if (!token) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
-    }
-
     // Join path segments, default to empty string if no path
     const path = params.path?.join("/") || "";
+
+    // Allow unauthenticated passthrough for public endpoints (health checks)
+    const unauthAllowed = path === "health" || path === "health/";
+
+    let token: string | null = null;
+    if (!unauthAllowed) {
+      const authResult = await auth();
+      token = await authResult.getToken({ template: "Default" });
+
+      if (!token) {
+        return NextResponse.json(
+          { error: "Unauthorized" },
+          { status: 401 }
+        );
+      }
+    }
 
     // Preserve the query string from the original request
     const search = request.nextUrl?.search || "";
 
-    const url = `${API_BASE_URL}/${path}${search}`;
+    const url = `${API_INTERNAL_BASE}/${path}${search}`;
 
     console.log(`[API Proxy] ${method} -> ${url}`);
 
     const headers: HeadersInit = {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
     };
+    if (token) {
+      (headers as any).Authorization = `Bearer ${token}`;
+    }
 
     let body: string | undefined;
     if (["POST", "PUT", "PATCH"].includes(method)) {
@@ -109,12 +119,20 @@ async function handleRequest(
       });
     }
 
-    // For JSON responses
-    const data = await response.json();
-    return Response.json(data, {
-      status: response.status,
-      headers: {},
-    });
+    // Return JSON when JSON, otherwise return text
+    if (contentType.includes('application/json')) {
+      const data = await response.json();
+      return Response.json(data, {
+        status: response.status,
+        headers: {},
+      });
+    } else {
+      const text = await response.text();
+      return new Response(text, {
+        status: response.status,
+        headers: { 'Content-Type': contentType || 'text/plain; charset=utf-8' },
+      });
+    }
   } catch (error) {
     console.error("[API Proxy Error]:", error);
     return NextResponse.json(

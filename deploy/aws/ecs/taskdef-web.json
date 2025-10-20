@@ -1,0 +1,40 @@
+{
+  "family": "clerk-web",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "${ECS_EXECUTION_ROLE_ARN}",
+  "taskRoleArn": "${ECS_TASK_ROLE_ARN}",
+  "containerDefinitions": [
+    {
+      "name": "web",
+      "image": "${ECR_WEB_IMAGE_URI}",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": 3000, "protocol": "tcp" }
+      ],
+      "environment": [
+        { "name": "NODE_ENV", "value": "production" },
+        { "name": "NEXT_PUBLIC_API_BASE_URL", "value": "https://your-domain.com" },
+        { "name": "API_INTERNAL_BASE_URL", "value": "https://your-domain.com" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "wget -qO- http://localhost:3000/ >/dev/null 2>&1 || exit 1"],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 20
+      },
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-region": "${AWS_REGION}",
+          "awslogs-group": "/ecs/clerk-web",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ],
+  "volumes": []
+}
