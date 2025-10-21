@@ -1,0 +1,112 @@
+name: CD - Push Docker images to ECR (and optional ECS refresh)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        type: choice
+        options: [staging, prod]
+        default: staging
+      publish:
+        description: "Build and push images to ECR"
+        type: boolean
+        default: true
+  push:
+    tags:
+      - "v*"
+
+env:
+  # Expected to be configured in repository settings:
+  # Secrets (required): AWS_ROLE_TO_ASSUME, AWS_REGION
+  # Variables (optional with sensible defaults): ECR_REPOSITORY_API, ECR_REPOSITORY_WEB, ECS_CLUSTER, ECS_SERVICE_API, ECS_SERVICE_WEB
+  AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+  AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME || '' }}
+  ECR_REPOSITORY_API: ${{ vars.ECR_REPOSITORY_API || 'clerk-api' }}
+  ECR_REPOSITORY_WEB: ${{ vars.ECR_REPOSITORY_WEB || 'clerk-web' }}
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER || '' }}
+  ECS_SERVICE_API: ${{ vars.ECS_SERVICE_API || '' }}
+  ECS_SERVICE_WEB: ${{ vars.ECS_SERVICE_WEB || '' }}
+
+jobs:
+  build-and-push:
+    name: Build & Push images to ECR
+    # Skip gracefully until AWS OIDC role is configured
+    if: ${{ env.AWS_ROLE_TO_ASSUME != '' && (github.event_name == 'workflow_dispatch' && inputs.publish || github.event_name == 'push') }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Determine image tags
+        id: meta
+        shell: bash
+        run: |
+          SHA="${GITHUB_SHA::12}"
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME}"
+          else
+            VERSION="build-${GITHUB_RUN_NUMBER}"
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./apps/api
+          file: apps/api/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_API }}:${{ steps.meta.outputs.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_API }}:${{ steps.meta.outputs.version }}
+
+      - name: Build & push Web image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./apps/web
+          file: apps/web/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_WEB }}:${{ steps.meta.outputs.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY_WEB }}:${{ steps.meta.outputs.version }}
+
+  deploy-ecs:
+    name: Force ECS new deployment (optional)
+    needs: build-and-push
+    if: ${{ env.AWS_ROLE_TO_ASSUME != '' && env.ECS_CLUSTER != '' && (env.ECS_SERVICE_API != '' || env.ECS_SERVICE_WEB != '') }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Force new deployment(s)
+        shell: bash
+        run: |
+          if [[ -n "${ECS_SERVICE_API}" ]]; then
+            echo "Forcing new deployment for API service: ${ECS_SERVICE_API}"
+            aws ecs update-service --cluster "${ECS_CLUSTER}" --service "${ECS_SERVICE_API}" --force-new-deployment
+          fi
+          if [[ -n "${ECS_SERVICE_WEB}" ]]; then
+            echo "Forcing new deployment for Web service: ${ECS_SERVICE_WEB}"
+            aws ecs update-service --cluster "${ECS_CLUSTER}" --service "${ECS_SERVICE_WEB}" --force-new-deployment
+          fi

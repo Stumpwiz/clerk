@@ -1,0 +1,14 @@
+node_modules/
+.next/
+out/
+coverage/
+npm-debug.log*
+yarn-error.log*
+
+# Env
+.env
+.env.local
+
+# VCS and misc
+.git/
+.gitignore

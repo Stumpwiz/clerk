@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Env and local data
+.env
+data/
+community_admin.db
+
+# Outputs
+files_letters/
+files_roster_reports/
+
+# Tests are not needed in runtime image
+tests/
+
+# VCS and misc
+.git/
+.gitignore
+docs/
