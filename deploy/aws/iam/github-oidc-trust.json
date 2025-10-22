@@ -15,11 +15,11 @@
         },
         "StringLike": {
           "token.actions.githubusercontent.com:sub": [
-            "repo:Stumpwiz/clerk:ref:refs/heads/main",
+            "repo:Stumpwiz/clerk:ref:refs/heads/master",
             "repo:Stumpwiz/clerk:ref:refs/tags/v*"
           ],
           "token.actions.githubusercontent.com:job_workflow_ref": [
-            "Stumpwiz/clerk/.github/workflows/cd-ecr.yml@refs/heads/main",
+            "Stumpwiz/clerk/.github/workflows/cd-ecr.yml@refs/heads/master",
             "Stumpwiz/clerk/.github/workflows/cd-ecr.yml@refs/tags/v*"
           ]
         }

@@ -12,17 +12,3 @@
     }
   ]
 }
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "ECSUpdateService",
-      "Effect": "Allow",
-      "Action": [
-        "ecs:UpdateService",
-        "ecs:DescribeServices"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
