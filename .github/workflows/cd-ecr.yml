@@ -103,19 +103,20 @@ jobs:
   deploy-ecs:
     name: Force ECS new deployment (optional)
     needs: build-and-push
-    if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' && vars.ECS_CLUSTER != '' && (vars.ECS_SERVICE_API != '' || vars.ECS_SERVICE_WEB != '') }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
     steps:
       - name: Configure AWS credentials (OIDC)
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' && env.ECS_CLUSTER != '' && (env.ECS_SERVICE_API != '' || env.ECS_SERVICE_WEB != '') }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Force new deployment(s)
+        if: ${{ env.AWS_ROLE_TO_ASSUME != '' && env.ECS_CLUSTER != '' && (env.ECS_SERVICE_API != '' || env.ECS_SERVICE_WEB != '') }}
         shell: bash
         run: |
           if [[ -n "${ECS_SERVICE_API}" ]]; then
