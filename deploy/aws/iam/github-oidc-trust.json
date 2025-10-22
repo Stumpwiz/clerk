@@ -1,0 +1,29 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "GitHubOIDCAssumeRole",
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::365591166807:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+          "token.actions.githubusercontent.com:repository": "Stumpwiz/clerk"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": [
+            "repo:Stumpwiz/clerk:ref:refs/heads/main",
+            "repo:Stumpwiz/clerk:ref:refs/tags/v*"
+          ],
+          "token.actions.githubusercontent.com:job_workflow_ref": [
+            "Stumpwiz/clerk/.github/workflows/cd-ecr.yml@refs/heads/main",
+            "Stumpwiz/clerk/.github/workflows/cd-ecr.yml@refs/tags/v*"
+          ]
+        }
+      }
+    }
+  ]
+}
