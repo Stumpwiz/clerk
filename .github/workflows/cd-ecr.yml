@@ -31,11 +31,8 @@ env:
 jobs:
   build-and-push:
     name: Build & Push images to ECR
-    # Skip gracefully until AWS OIDC role is configured
-    if: ${{ env.AWS_ROLE_TO_ASSUME != '' && (
-            (github.event_name == 'workflow_dispatch' && (github.event.inputs.publish == 'true' || github.event.inputs.publish == true)) ||
-            (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
-          ) }}
+    # Trigger on manual publish or v* tags; secrets presence checked inside steps
+    if: ${{ (github.event_name == 'workflow_dispatch' && (github.event.inputs.publish == 'true' || github.event.inputs.publish == true)) || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -106,7 +103,7 @@ jobs:
   deploy-ecs:
     name: Force ECS new deployment (optional)
     needs: build-and-push
-    if: ${{ env.AWS_ROLE_TO_ASSUME != '' && env.ECS_CLUSTER != '' && (env.ECS_SERVICE_API != '' || env.ECS_SERVICE_WEB != '') }}
+    if: ${{ secrets.AWS_ROLE_TO_ASSUME != '' && vars.ECS_CLUSTER != '' && (vars.ECS_SERVICE_API != '' || vars.ECS_SERVICE_WEB != '') }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
