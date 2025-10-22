@@ -20,7 +20,8 @@
           ],
           "token.actions.githubusercontent.com:job_workflow_ref": [
             "Stumpwiz/clerk/.github/workflows/cd-ecr.yml@refs/heads/master",
-            "Stumpwiz/clerk/.github/workflows/cd-ecr.yml@refs/tags/v*"
+            "Stumpwiz/clerk/.github/workflows/cd-ecr.yml@refs/tags/v*",
+            "Stumpwiz/clerk/.github/workflows/diag-secrets.yml@refs/heads/master"
           ]
         }
       }
