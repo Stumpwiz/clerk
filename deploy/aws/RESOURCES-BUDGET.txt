@@ -51,9 +51,9 @@ ECS_TASK_ROLE_ARN=arn:aws:iam::365591166807:role/clerk-ecs-task-role
 PHASE 6: VPC INFO (for reference)
 ================================================================================
 # You'll need to note which VPC and subnet you used
-VPC_ID=
+VPC_ID=vpc-ece61691
 
-SUBNET_ID=
+SUBNET_ID=subnet-66826957
 
 
 ================================================================================
@@ -69,15 +69,15 @@ ECR_NGINX_IMAGE_URI=365591166807.dkr.ecr.us-east-1.amazonaws.com/clerk-nginx:v0.
 PHASE 6: ECS CLUSTER & SERVICE (To be created)
 ================================================================================
 ECS_CLUSTER_NAME=clerk-main
-ECS_CLUSTER_ARN=
+ECS_CLUSTER_ARN=arn:aws:ecs:us-east-1:365591166807:cluster/clerk-main
 
 ECS_SERVICE_NAME=clerk-combined-service
-ECS_SERVICE_ARN=
+ECS_SERVICE_ARN=arn:aws:ecs:us-east-1:365591166807:task/clerk-main/f1d6e81a4fda4fcab41b2512e1888265
 
-ECS_TASK_DEFINITION_ARN=
+ECS_TASK_DEFINITION_ARN=arn:aws:ecs:us-east-1:365591166807:task-definition/clerk-combined:1
 
 # Public IP (assigned when service starts)
-ECS_PUBLIC_IP=
+ECS_PUBLIC_IP=eni-062bf35684314aa44
 
 
 ================================================================================
