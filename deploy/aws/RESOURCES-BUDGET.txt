@@ -1,0 +1,126 @@
+CLERK AWS Resources - Budget Deployment (No ALB)
+================================================================================
+Last Updated: 2025-10-24
+Region: us-east-1
+AWS Account: 365591166807
+Deployment Type: Budget (Single Fargate task with nginx proxy)
+================================================================================
+
+INSTRUCTIONS:
+- Copy and paste ARNs/IDs into this file as you complete each phase
+- Keep this file updated - you'll need these values for Phase 6 deployment
+- Use Ctrl+F to quickly find specific resource types
+
+================================================================================
+PHASE 1: EFS (Elastic File System)
+================================================================================
+EFS_FILESYSTEM_ID=fs-0d3f870492feea6c5
+
+
+================================================================================
+PHASE 2: SECURITY GROUPS
+================================================================================
+ECS_SECURITY_GROUP_ID=sg-0f52c35c77b8ed90e
+
+EFS_SECURITY_GROUP_ID=sg-0643c747711f69285
+
+
+================================================================================
+PHASE 3: CLOUDWATCH LOG GROUPS
+================================================================================
+# No ARNs needed - referenced by name: /ecs/clerk-combined
+
+
+================================================================================
+PHASE 4: SECRETS MANAGER
+================================================================================
+SECRET_ARN_CLERK_PUBLISHABLE_KEY=arn:aws:secretsmanager:us-east-1:365591166807:secret:clerk/publishable-key-ZI9Obv
+
+SECRET_ARN_CLERK_SECRET_KEY=arn:aws:secretsmanager:us-east-1:365591166807:secret:clerk/secret-key-H4sxey
+
+
+================================================================================
+PHASE 5: IAM ROLES
+================================================================================
+ECS_EXECUTION_ROLE_ARN=arn:aws:iam::365591166807:role/clerk-ecs-execution-role
+
+ECS_TASK_ROLE_ARN=arn:aws:iam::365591166807:role/clerk-ecs-task-role
+
+
+================================================================================
+PHASE 6: VPC INFO (for reference)
+================================================================================
+# You'll need to note which VPC and subnet you used
+VPC_ID=
+
+SUBNET_ID=
+
+
+================================================================================
+ECR IMAGES (Already Available)
+================================================================================
+ECR_API_IMAGE_URI=365591166807.dkr.ecr.us-east-1.amazonaws.com/clerk-api:v0.1.9
+ECR_WEB_IMAGE_URI=365591166807.dkr.ecr.us-east-1.amazonaws.com/clerk-web:dd5aad3136b2
+ECR_NGINX_IMAGE_URI=365591166807.dkr.ecr.us-east-1.amazonaws.com/clerk-nginx:v0.2.0
+# Note: nginx image will be created when you push v0.2.0 tag
+
+
+================================================================================
+PHASE 6: ECS CLUSTER & SERVICE (To be created)
+================================================================================
+ECS_CLUSTER_NAME=clerk-main
+ECS_CLUSTER_ARN=
+
+ECS_SERVICE_NAME=clerk-combined-service
+ECS_SERVICE_ARN=
+
+ECS_TASK_DEFINITION_ARN=
+
+# Public IP (assigned when service starts)
+ECS_PUBLIC_IP=
+
+
+================================================================================
+DOMAIN & DNS (Phase 7)
+================================================================================
+DOMAIN=clerk.mrrc.online
+# You'll create an A record pointing to ECS_PUBLIC_IP
+
+
+================================================================================
+ESTIMATED MONTHLY COSTS
+================================================================================
+EFS (Bursting, <1GB, 1 AZ):     $0.30
+Secrets Manager (2 secrets):     $0.80
+Fargate (0.5 vCPU, 1GB RAM):     $5.18
+CloudWatch Logs (<100MB):        $0.05
+Data Transfer (minimal):         $0.10
+                         ----------------
+TOTAL:                          ~$6.43/month
+
+Compare to ALB deployment:      ~$28/month
+Savings:                        ~$22/month (78%)
+Annual savings:                 ~$264/year
+
+
+================================================================================
+NEXT STEPS AFTER PHASE 1-5
+================================================================================
+1. Push nginx image to ECR (git tag v0.2.0 && git push origin v0.2.0)
+2. Create ECS cluster via console
+3. Register task definition (I'll provide pre-filled JSON)
+4. Create ECS service with public IP
+5. Point DNS to public IP
+6. Set up Let's Encrypt SSL (optional but recommended)
+
+
+================================================================================
+TROUBLESHOOTING NOTES
+================================================================================
+- If EFS mount fails: Check EFS security group allows NFS (2049) from ECS SG
+- If containers can't pull images: Check ECS execution role has ECR permissions
+- If secrets fail to load: Check execution role has secrets manager permissions
+- If task fails to start: Check CloudWatch logs at /ecs/clerk-combined
+
+
+================================================================================
