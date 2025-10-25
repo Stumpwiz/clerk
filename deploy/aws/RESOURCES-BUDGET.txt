@@ -124,3 +124,6 @@ TROUBLESHOOTING NOTES
 
 
 ================================================================================
+CURRENT_TASK_DEFINITION=clerk-combined:12
+CURRENT_PUBLIC_IP=98.91.252.17
+NGINX_IMAGE_VERSION=v0.3.0
