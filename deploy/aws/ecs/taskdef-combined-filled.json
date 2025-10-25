@@ -17,11 +17,11 @@
       "dependsOn": [
         {
           "containerName": "api",
-          "condition": "HEALTHY"
+          "condition": "START"
         },
         {
           "containerName": "web",
-          "condition": "HEALTHY"
+          "condition": "START"
         }
       ],
       "healthCheck": {
