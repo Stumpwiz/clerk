@@ -74,7 +74,14 @@ async function handleRequest(
     const search = request.nextUrl?.search || "";
 
     // Add /api prefix for FastAPI routes (except bare health check)
-    const apiPath = (path === "health" || path === "health/") ? path : `api/${path}`;
+    let apiPath = (path === "health" || path === "health/") ? path : `api/${path}`;
+
+    // FastAPI requires trailing slashes for most endpoints
+    // Add trailing slash if not already present and not health endpoint
+    if (path !== "health" && path !== "health/" && !apiPath.endsWith('/')) {
+      apiPath += '/';
+    }
+
     const url = `${API_INTERNAL_BASE}/${apiPath}${search}`;
 
     console.log(`[API Proxy] ${method} -> ${url}`);

@@ -1,28 +1,33 @@
-# Web Dockerfile (Next.js 15)
+# ---- deps: install node_modules once, cached by lockfile
 FROM node:22-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
-# Prefer npm ci if lockfile exists; fallback to npm install
 RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
-FROM node:22-alpine AS builder
+# ---- build: copy source and build Next.js
+FROM node:22-alpine AS build
 WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_dummy
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Provide build-time envs with safe defaults to satisfy frameworks that read at build
-ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_dummy
-ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
-ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
-ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
+ENV NODE_ENV=production
+# (Optional) quick diag to ensure the proxy route is present in context
+RUN ls -la app/api/proxy || true
 
-# Build
 RUN npm run build
 
+# ---- runner: non-standalone (copies full app + .next + node_modules)
 FROM node:22-alpine AS runner
-ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=builder /app ./
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# Copy everything the Next server needs at runtime
+COPY --from=build /app /app
+
 EXPOSE 3000
-# Ensure start script exists; otherwise fallback to next start
-CMD ["npm", "start"]
+CMD ["npm","run","start"]

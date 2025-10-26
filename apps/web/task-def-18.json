@@ -1,0 +1,258 @@
+{
+    "taskDefinitionArn": "arn:aws:ecs:us-east-1:365591166807:task-definition/clerk-combined:17",
+    "containerDefinitions": [
+        {
+            "name": "nginx",
+            "image": "365591166807.dkr.ecr.us-east-1.amazonaws.com/clerk-nginx:v0.3.2",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 80,
+                    "hostPort": 80,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "dependsOn": [
+                {
+                    "containerName": "api",
+                    "condition": "START"
+                },
+                {
+                    "containerName": "web",
+                    "condition": "START"
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/clerk-combined",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "nginx"
+                }
+            },
+            "healthCheck": {
+                "command": [
+                    "CMD-SHELL",
+                    "wget --no-verbose --tries=1 --spider http://localhost/nginx-health || exit 1"
+                ],
+                "interval": 30,
+                "timeout": 5,
+                "retries": 3,
+                "startPeriod": 10
+            },
+            "systemControls": []
+        },
+        {
+            "name": "api",
+            "image": "365591166807.dkr.ecr.us-east-1.amazonaws.com/clerk-api:v0.1.9",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 8000,
+                    "hostPort": 8000,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "ALLOWED_ORIGINS",
+                    "value": "[\"*\"]"
+                },
+                {
+                    "name": "XELATEX_PATH",
+                    "value": "xelatex"
+                },
+                {
+                    "name": "DATABASE_URL",
+                    "value": "sqlite:////app/data/community_admin.db"
+                }
+            ],
+            "mountPoints": [
+                {
+                    "sourceVolume": "efs",
+                    "containerPath": "/app/data",
+                    "readOnly": false
+                },
+                {
+                    "sourceVolume": "efs",
+                    "containerPath": "/app/files_letters",
+                    "readOnly": false
+                },
+                {
+                    "sourceVolume": "efs",
+                    "containerPath": "/app/files_roster_reports",
+                    "readOnly": false
+                }
+            ],
+            "volumesFrom": [],
+            "secrets": [
+                {
+                    "name": "CLERK_PUBLISHABLE_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:365591166807:secret:clerk/publishable-key-ZI9Obv"
+                },
+                {
+                    "name": "CLERK_SECRET_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:365591166807:secret:clerk/secret-key-H4sxey"
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/clerk-combined",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "api"
+                }
+            },
+            "healthCheck": {
+                "command": [
+                    "CMD-SHELL",
+                    "curl -fsS http://localhost:8000/health || exit 1"
+                ],
+                "interval": 30,
+                "timeout": 5,
+                "retries": 3,
+                "startPeriod": 20
+            },
+            "systemControls": []
+        },
+        {
+            "name": "web",
+            "image": "365591166807.dkr.ecr.us-east-1.amazonaws.com/clerk-web:v0.2.2",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 3000,
+                    "hostPort": 3000,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "NODE_ENV",
+                    "value": "production"
+                },
+                {
+                    "name": "NEXT_PUBLIC_API_BASE_URL",
+                    "value": ""
+                },
+                {
+                    "name": "API_INTERNAL_BASE_URL",
+                    "value": "http://localhost:8000"
+                }
+            ],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "secrets": [
+                {
+                    "name": "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:365591166807:secret:clerk/publishable-key-ZI9Obv"
+                },
+                {
+                    "name": "CLERK_SECRET_KEY",
+                    "valueFrom": "arn:aws:secretsmanager:us-east-1:365591166807:secret:clerk/secret-key-H4sxey"
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/clerk-combined",
+                    "awslogs-region": "us-east-1",
+                    "awslogs-stream-prefix": "web"
+                }
+            },
+            "healthCheck": {
+                "command": [
+                    "CMD-SHELL",
+                    "wget -qO- http://localhost:3000/ >/dev/null 2>&1 || exit 1"
+                ],
+                "interval": 30,
+                "timeout": 5,
+                "retries": 3,
+                "startPeriod": 60
+            },
+            "systemControls": []
+        }
+    ],
+    "family": "clerk-combined",
+    "taskRoleArn": "arn:aws:iam::365591166807:role/clerk-ecs-task-role",
+    "executionRoleArn": "arn:aws:iam::365591166807:role/clerk-ecs-execution-role",
+    "networkMode": "awsvpc",
+    "revision": 17,
+    "volumes": [
+        {
+            "name": "efs",
+            "efsVolumeConfiguration": {
+                "fileSystemId": "fs-0d3f870492feea6c5",
+                "rootDirectory": "/",
+                "transitEncryption": "ENABLED"
+            }
+        }
+    ],
+    "status": "ACTIVE",
+    "requiresAttributes": [
+        {
+            "name": "ecs.capability.execution-role-awslogs"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.ecr-auth"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.task-iam-role"
+        },
+        {
+            "name": "ecs.capability.container-health-check"
+        },
+        {
+            "name": "ecs.capability.execution-role-ecr-pull"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
+        },
+        {
+            "name": "ecs.capability.task-eni"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.29"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
+        },
+        {
+            "name": "ecs.capability.efsAuth"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
+        },
+        {
+            "name": "ecs.capability.secrets.asm.environment-variables"
+        },
+        {
+            "name": "ecs.capability.efs"
+        },
+        {
+            "name": "ecs.capability.container-ordering"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.25"
+        }
+    ],
+    "placementConstraints": [],
+    "compatibilities": [
+        "EC2",
+        "FARGATE",
+        "MANAGED_INSTANCES"
+    ],
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "512",
+    "memory": "1024",
+    "registeredAt": "2025-10-26T13:40:00.495000-04:00",
+    "registeredBy": "arn:aws:iam::365591166807:user/Administrator"
+}

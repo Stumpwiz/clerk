@@ -1,14 +1,19 @@
-node_modules/
-.next/
-out/
-coverage/
+# build artifacts
+.next
+out
+coverage
+
+# dependencies
+node_modules
+
+# logs
 npm-debug.log*
 yarn-error.log*
 
-# Env
+# env
 .env
 .env.local
 
-# VCS and misc
-.git/
+# vcs
+.git
 .gitignore
