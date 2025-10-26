@@ -73,7 +73,9 @@ async function handleRequest(
     // Preserve the query string from the original request
     const search = request.nextUrl?.search || "";
 
-    const url = `${API_INTERNAL_BASE}/${path}${search}`;
+    // Add /api prefix for FastAPI routes (except bare health check)
+    const apiPath = (path === "health" || path === "health/") ? path : `api/${path}`;
+    const url = `${API_INTERNAL_BASE}/${apiPath}${search}`;
 
     console.log(`[API Proxy] ${method} -> ${url}`);
 
