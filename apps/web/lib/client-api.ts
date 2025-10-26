@@ -13,7 +13,11 @@ export async function clientApiCall<T = unknown>(
   path: string,
   init?: RequestInit
 ): Promise<T> {
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  // Normalize path and strip leading /api if present to avoid double prefix
+  let normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  if (normalizedPath.startsWith("/api/")) {
+    normalizedPath = normalizedPath.substring(4); // Remove "/api"
+  }
   const url = `/api/proxy${normalizedPath}`;
 
   const headers: HeadersInit = {
@@ -86,28 +90,28 @@ export interface PDFListItem {
 // Letter Template API
 export const letterApi = {
   getTemplate: () =>
-    clientApiCall<LetterTemplate>("/api/v1/letters/template"),
+    clientApiCall<LetterTemplate>("/v1/letters/template"),
 
   updateTemplate: (data: Omit<LetterTemplate, "id">) =>
-    clientApiCall<LetterTemplate>("/api/v1/letters/template", {
+    clientApiCall<LetterTemplate>("/v1/letters/template", {
       method: "PUT",
       body: JSON.stringify(data),
     }),
 
   generate: (data: LetterGenerateRequest) =>
-    clientApiCall<LetterGenerateResponse>("/api/v1/letters/generate", {
+    clientApiCall<LetterGenerateResponse>("/v1/letters/generate", {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
-  listPDFs: () => clientApiCall<PDFListItem[]>("/api/v1/letters/pdfs"),
+  listPDFs: () => clientApiCall<PDFListItem[]>("/v1/letters/pdfs"),
 
   deletePDF: (filename: string) =>
     clientApiCall<{ success: boolean }>(
-      `/api/v1/letters/pdfs/${encodeURIComponent(filename)}`,
+      `/v1/letters/pdfs/${encodeURIComponent(filename)}`,
       { method: "DELETE" }
     ),
   
   getPDFUrl: (filename: string) =>
-    `/api/proxy/api/v1/letters/pdfs/${encodeURIComponent(filename)}`,
+    `/api/proxy/v1/letters/pdfs/${encodeURIComponent(filename)}`,
 };
