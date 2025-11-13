@@ -1,0 +1,51 @@
+\documentclass[12pt,twoside]{article}
+\usepackage{lastpage}
+\usepackage{sectsty}
+\usepackage[top=0.65in, bottom=0.75in, left=0.75in, right=0.75in]{geometry}
+\usepackage{titlesec}
+\usepackage{datetime}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+
+\titleformat{\section}{\normalfont\Large\bfseries}{}{0pt}{}
+
+\pagestyle{fancy}
+\fancyhead{}
+\newcommand{\version}{Generated \VAR{generated}}
+\newcommand{\footerLine}{\small \version}
+\fancyfoot[ROF,LEF]{\thepage}
+\fancyfoot[LOF,REF]{\footerLine}
+\fancyfoot[COF,CEF]{}
+\renewcommand{\headrulewidth}{0.0pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\allsectionsfont{\centering}
+
+\begin{document}
+    \raggedbottom
+    \begin{center}
+        \includegraphics{../static/residentCouncilLogoSmall} \\
+        \vspace{0.5em}
+        {\LARGE \textbf{\VAR{title}}}
+    \end{center}
+
+
+    \BLOCK{ for body_name, members in grouped.items() }
+
+    \vspace{0.5em}
+
+
+    \section*{\VAR{body_name}}
+    \begin{center}
+        \small
+        \begin{tabular}{llll}
+            \textbf{Office}    & \textbf{Incumbent}                   & \textbf{Term}        & \textbf{Ends}              \\
+            \hline
+            \BLOCK{ for member in members }
+            \VAR{member.title} & \VAR{member.first} \VAR{member.last} & \VAR{member.ordinal} & \VAR{member.formatted_end} \\
+            \BLOCK{ endfor }
+        \end{tabular}
+    \end{center}
+
+    \BLOCK{ endfor }
+
+\end{document}

@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Environment
+.env
+.env.local
+
+# Database (don't copy to image, use volume)
+instance/
+*.db
+*.db-journal
+
+# Generated files (will be created at runtime)
+files_letters/*.pdf
+files_letters/*.txt
+files_roster_reports/*.pdf
+files_roster_reports/*.tex
+
+# Testing
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Documentation
+README.md

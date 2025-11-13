@@ -1,0 +1,35 @@
+# FastAPI Framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Database
+sqlalchemy==2.0.36
+alembic==1.13.3
+
+# Template rendering
+jinja2==3.1.2
+
+# Environment variables
+python-dotenv==1.0.0
+
+# CORS
+fastapi-cors==0.0.6
+
+# Authentication (Clerk)
+pyjwt==2.8.0
+cryptography==41.0.7
+requests==2.31.0
+
+# Date handling
+python-dateutil==2.8.2
+
+# Pydantic for data validation
+pydantic==2.9.2
+pydantic-settings==2.5.2
+email-validator==2.1.0
+
+# Development
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2
