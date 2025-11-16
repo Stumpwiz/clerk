@@ -1,0 +1,186 @@
+name: PostgreSQL Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/test-postgres.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/test-postgres.yml'
+
+jobs:
+  test-postgres:
+    name: Test with PostgreSQL
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18.1
+        env:
+          POSTGRES_USER: clerk_user
+          POSTGRES_PASSWORD: clerk_test_password
+          POSTGRES_DB: clerk_test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgresql://clerk_user:clerk_test_password@localhost:5432/clerk_test_db
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+        cache: 'pip'
+
+    - name: Install dependencies
+      working-directory: ./backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Wait for PostgreSQL
+      run: |
+        python backend/scripts/wait_for_db.py --timeout 60
+
+    - name: Run Alembic migrations
+      working-directory: ./backend
+      run: |
+        alembic upgrade head
+
+    - name: Validate database schema
+      working-directory: ./backend
+      run: |
+        alembic current
+
+    - name: Run full test suite with coverage
+      working-directory: ./backend
+      run: |
+        pytest tests/ -v --tb=short --cov=app --cov-report=term-missing --cov-report=html
+
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-report
+        path: backend/htmlcov/
+
+  migration-validation:
+    name: Validate Migration Scripts
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18.1
+        env:
+          POSTGRES_USER: clerk_user
+          POSTGRES_PASSWORD: clerk_test_password
+          POSTGRES_DB: clerk_test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    env:
+      DATABASE_URL: postgresql://clerk_user:clerk_test_password@localhost:5432/clerk_test_db
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+        cache: 'pip'
+
+    - name: Install dependencies
+      working-directory: ./backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Wait for PostgreSQL
+      run: |
+        python backend/scripts/wait_for_db.py --timeout 60
+
+    - name: Test fresh database initialization
+      working-directory: ./backend
+      run: |
+        alembic upgrade head
+        python scripts/test_models.py
+
+    - name: Test Alembic downgrade/upgrade cycle
+      working-directory: ./backend
+      run: |
+        alembic downgrade -1 || echo "No previous migration; skipping downgrade"
+        alembic upgrade head
+
+    - name: Validate basic CRUD operations (SQLAlchemy)
+      env:
+        DATABASE_URL: ${{ env.DATABASE_URL }}
+      run: |
+        python - << 'PY'
+        import os
+        from sqlalchemy import create_engine, text
+        url = os.environ.get('DATABASE_URL')
+        engine = create_engine(url, future=True)
+        with engine.begin() as conn:
+            conn.execute(text("DROP TABLE IF EXISTS ci_smoke"))
+            conn.execute(text("CREATE TABLE ci_smoke (id SERIAL PRIMARY KEY, name TEXT NOT NULL, n INT NOT NULL)"))
+            conn.execute(text("INSERT INTO ci_smoke (name, n) VALUES (:name, :n)"), {"name": "alpha", "n": 1})
+            res = conn.execute(text("SELECT name, n FROM ci_smoke WHERE name=:name"), {"name": "alpha"}).first()
+            assert res is not None and res[0] == 'alpha' and res[1] == 1
+            conn.execute(text("UPDATE ci_smoke SET n = n + 1 WHERE name=:name"), {"name": "alpha"})
+            res = conn.execute(text("SELECT n FROM ci_smoke WHERE name=:name"), {"name": "alpha"}).scalar_one()
+            assert res == 2
+            conn.execute(text("DELETE FROM ci_smoke WHERE name=:name"), {"name": "alpha"})
+            res = conn.execute(text("SELECT count(*) FROM ci_smoke")).scalar_one()
+            assert res == 0
+            conn.execute(text("DROP TABLE ci_smoke"))
+        PY
+
+  docker-build:
+    name: Test Docker Build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build backend Docker image
+      working-directory: ./backend
+      run: |
+        docker build -t clerk-backend:test .
+
+    - name: Build frontend Docker image
+      working-directory: ./frontend
+      run: |
+        docker build -t clerk-frontend:test \
+          --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_placeholder \
+          --build-arg NEXT_PUBLIC_API_URL=http://localhost:8000 \
+          .
+
+    - name: Test Docker Compose stack
+      run: |
+        docker compose -f docker-compose.yml build

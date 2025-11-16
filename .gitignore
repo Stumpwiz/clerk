@@ -1,13 +1,9 @@
-# Local docs
-/docs/
-# prototype/
-prototype/
-oldFrontend/
 backend/test.json
 backend/instance/
 backend/files_letters/*.pdf
 backend/files_letters/*.tex
 backend/files_roster_reports/*.pdf
+.context/
 
 # Database files
 *.db
@@ -84,7 +80,6 @@ db.sqlite3
 db.sqlite3-journal
 
 # Flask stuff:
-instance/
 .webassets-cache
 
 # Scrapy stuff:
@@ -199,5 +194,5 @@ finale/.bedrock_agentcore.yaml
 finale/Dockerfile
 finale/.dockerignore
 # Local docs
-docs/
+#docs/
 
