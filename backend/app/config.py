@@ -26,6 +26,8 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3000",
+        "https://test.mrrc.online",
+        "https://api.mrrc.online",
     ]
 
     @field_validator('cors_origins', mode='before')
