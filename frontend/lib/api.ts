@@ -11,6 +11,21 @@ class ApiClient {
     this.baseUrl = baseUrl;
   }
 
+  // Ensure we always send a valid JSON body object and coerce empty strings to null
+  private toJsonBody(input: Record<string, unknown> | undefined | null): string {
+    const obj = (input && typeof input === 'object') ? input : {};
+    const normalized: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === 'string') {
+        // Convert empty strings to null to satisfy backend optional fields
+        normalized[k] = v.trim() === '' ? null : v;
+      } else {
+        normalized[k] = v as unknown;
+      }
+    }
+    return JSON.stringify(normalized);
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
@@ -52,14 +67,14 @@ class ApiClient {
   async createBody(data: Omit<Body, 'body_id'>): Promise<Body> {
     return this.request<Body>('/api/bodies/', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: this.toJsonBody(data as unknown as Record<string, unknown>),
     });
   }
 
   async updateBody(id: number, data: Partial<Omit<Body, 'body_id'>>): Promise<Body> {
     return this.request<Body>(`/api/bodies/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: this.toJsonBody(data as unknown as Record<string, unknown>),
     });
   }
 
@@ -81,14 +96,14 @@ class ApiClient {
   async createOffice(data: Omit<Office, 'office_id'>): Promise<Office> {
     return this.request<Office>('/api/offices/', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: this.toJsonBody(data as unknown as Record<string, unknown>),
     });
   }
 
   async updateOffice(id: number, data: Partial<Omit<Office, 'office_id'>>): Promise<Office> {
     return this.request<Office>(`/api/offices/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: this.toJsonBody(data as unknown as Record<string, unknown>),
     });
   }
 
@@ -110,14 +125,14 @@ class ApiClient {
   async createPerson(data: Omit<Person, 'person_id'>): Promise<Person> {
     return this.request<Person>('/api/persons/', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: this.toJsonBody(data as unknown as Record<string, unknown>),
     });
   }
 
   async updatePerson(id: number, data: Partial<Omit<Person, 'person_id'>>): Promise<Person> {
     return this.request<Person>(`/api/persons/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: this.toJsonBody(data as unknown as Record<string, unknown>),
     });
   }
 
@@ -139,14 +154,14 @@ class ApiClient {
   async createTerm(data: Term): Promise<Term> {
     return this.request<Term>('/api/terms/', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: this.toJsonBody(data as unknown as Record<string, unknown>),
     });
   }
 
   async updateTerm(personId: number, officeId: number, data: Partial<Omit<Term, 'term_person_id' | 'term_office_id'>>): Promise<Term> {
     return this.request<Term>(`/api/terms/${personId}/${officeId}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: this.toJsonBody(data as unknown as Record<string, unknown>),
     });
   }
 
@@ -164,7 +179,7 @@ class ApiClient {
   async updateLetterTemplate(data: Omit<LetterTemplate, 'id'>): Promise<LetterTemplate> {
     return this.request<LetterTemplate>('/api/letter-template/', {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: this.toJsonBody(data as unknown as Record<string, unknown>),
     });
   }
 }
