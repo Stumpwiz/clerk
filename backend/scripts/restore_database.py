@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """
-Restore utility for SQLite and PostgreSQL databases.
+Restore utility for PostgreSQL databases.
 
 Features:
 - Validates backup file before restore
 - Supports dry-run (no changes)
-- SQLite: backs up current DB, then restores from .db file
 - PostgreSQL: restores from pg_dump custom format (.dump) via pg_restore, or .sql via psql
 - Safety prompts unless --force
 
@@ -14,7 +13,7 @@ Usage examples:
   python backend/scripts/restore_database.py --backup backend/backups/postgres_db@host_20250101T000000Z.dump --dry-run
 
   # Restore with force (non-interactive)
-  python backend/scripts/restore_database.py --backup backend/backups/sqlite_community_admin.db_20250101T000000Z.db --force
+  python backend/scripts/restore_database.py --backup backend/backups/postgres_db@host_20250101T000000Z.dump --force
 
   # Override target DB URL
   python backend/scripts/restore_database.py --backup path/to/file.dump --database-url postgresql://user:pass@host:5432/db
@@ -37,38 +36,18 @@ def utc_ts() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
-def get_database_url(cli_url: Optional[str]) -> str:
-    if cli_url:
-        return cli_url
-    try:
-        from app.config import get_database_url as app_get_db_url  # type: ignore
+def get_database_url(override: str = None) -> str:
+    """Get database URL from override argument or settings"""
+    if override:
+        return override
 
-        url = app_get_db_url()
-        if url:
-            return url
-    except Exception:
-        pass
-    env_url = os.getenv("DATABASE_URL")
-    if not env_url:
-        raise SystemExit("DATABASE_URL not set and app.config could not provide one.")
-    return env_url
+    from app.config import settings
+    if settings.database_url:
+        return settings.database_url
+
+    raise SystemExit("DATABASE_URL not set. Please set it in environment or pass --database-url")
 
 
-def is_sqlite_url(url: str) -> bool:
-    return url.startswith("sqlite:")
-
-
-def resolve_sqlite_path(url: str) -> Path:
-    if not url.startswith("sqlite///") and not url.startswith("sqlite:///"):
-        # normalize if needed
-        pass
-    if not url.startswith("sqlite:///"):
-        raise SystemExit(f"Unsupported SQLite URL: {url}")
-    path_str = url.replace("sqlite:///", "", 1)
-    if path_str.startswith("./"):
-        backend_dir = Path(__file__).resolve().parents[2] / "backend"
-        return (backend_dir / path_str[2:]).resolve()
-    return Path(path_str).resolve()
 
 
 def check_cmd(cmd: str) -> None:
@@ -82,13 +61,6 @@ def run_cmd(cmd: list[str], env: Optional[dict] = None) -> None:
         raise SystemExit(f"Command failed ({rc}): {' '.join(cmd)}")
 
 
-def validate_sqlite_backup(path: Path) -> None:
-    if not path.exists():
-        raise SystemExit(f"Backup not found: {path}")
-    with path.open("rb") as f:
-        header = f.read(16)
-    if not header.startswith(b"SQLite format 3\x00"):
-        raise SystemExit("Backup file does not appear to be SQLite .db format")
 
 
 def parse_pg_url(url: str):
@@ -132,27 +104,6 @@ def prompt_yesno(msg: str) -> bool:
     return ans in ("y", "yes")
 
 
-def restore_sqlite(backup: Path, target_url: str, dry_run: bool, force: bool) -> None:
-    target_path = resolve_sqlite_path(target_url)
-    validate_sqlite_backup(backup)
-    target_dir = target_path.parent
-    target_dir.mkdir(parents=True, exist_ok=True)
-    pre_backup = target_dir / f"{target_path.name}.pre-restore.{utc_ts()}"
-
-    if dry_run:
-        print(f"[DRY-RUN] Would backup current DB to: {pre_backup}")
-        print(f"[DRY-RUN] Would restore SQLite from {backup} to {target_path}")
-        return
-
-    if target_path.exists():
-        if not force and not prompt_yesno(f"About to overwrite {target_path}. Proceed?"):
-            print("Aborted.")
-            return
-        shutil.copy2(str(target_path), str(pre_backup))
-        print(f"[OK] Saved pre-restore copy: {pre_backup}")
-
-    shutil.copy2(str(backup), str(target_path))
-    print(f"[OK] Restored SQLite database to: {target_path}")
 
 
 def restore_postgres(backup: Path, target_url: str, dry_run: bool, force: bool) -> None:
@@ -212,8 +163,8 @@ def restore_postgres(backup: Path, target_url: str, dry_run: bool, force: bool) 
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Restore database (SQLite or PostgreSQL)")
-    p.add_argument("--backup", required=True, help="Path to backup file (.db, .dump, or .sql)")
+    p = argparse.ArgumentParser(description="Restore PostgreSQL database")
+    p.add_argument("--backup", required=True, help="Path to backup file (.dump or .sql)")
     p.add_argument("--database-url", dest="database_url", default=None, help="Override target DATABASE_URL")
     p.add_argument("--dry-run", action="store_true", help="Print actions without executing")
     p.add_argument("--force", action="store_true", help="Do not prompt for confirmation")
@@ -227,10 +178,8 @@ def main() -> None:
     if not backup.exists():
         raise SystemExit(f"Backup path not found: {backup}")
 
-    if is_sqlite_url(url):
-        restore_sqlite(backup, url, args.dry_run, args.force)
-    else:
-        restore_postgres(backup, url, args.dry_run, args.force)
+    # PostgreSQL only
+    restore_postgres(backup, url, args.dry_run, args.force)
 
 
 if __name__ == "__main__":

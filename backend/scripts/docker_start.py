@@ -5,7 +5,7 @@ Container startup orchestrator for the backend service.
 Responsibilities:
 - Resolve `DATABASE_URL` using the app config (supports POSTGRES_* pieces)
 - If using PostgreSQL: wait for readiness, then run Alembic `upgrade head`
-- If using SQLite (or DATABASE_URL is empty): skip migrations
+- If `DATABASE_URL` is empty: skip migrations
 - Finally, start Uvicorn to serve the FastAPI app
 
 Configurable via environment variables:
@@ -105,15 +105,14 @@ def main() -> None:
     url = get_database_url()
     disable_auto_migrate = os.getenv("DISABLE_AUTO_MIGRATE", "false").lower() in ("1", "true", "yes")
 
-    if is_postgres(url):
-        # Wait for DB to be ready
+    # Skip migrations if DATABASE_URL is empty
+    if not url.strip():
+        print("⚠️  No DATABASE_URL configured — skipping migrations")
+    else:
+        # PostgreSQL: wait for DB to be ready, then run migrations
         wait_for_db(url, timeout=120)
-        # Optionally run Alembic
         if not disable_auto_migrate:
             run_alembic_upgrade()
-    else:
-        # SQLite or empty URL — skip migrations
-        pass
 
     # Start API server
     start_uvicorn()

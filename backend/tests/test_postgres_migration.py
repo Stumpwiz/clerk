@@ -2,9 +2,8 @@
 End-to-end PostgreSQL migration test suite.
 
 Covers:
-- Database connection (SQLite and PostgreSQL)
+- Database connection (PostgreSQL)
 - Table creation via Alembic migrations
-- Data migration from SQLite → PostgreSQL
 - CRUD operations on PostgreSQL
 - FK constraints enforcement
 - Letter generation against PostgreSQL
@@ -23,15 +22,6 @@ import subprocess
 import pytest
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.exc import IntegrityError
-
-
-def test_can_connect_sqlite(sqlite_temp_db: str):
-    eng = create_engine(sqlite_temp_db, connect_args={"check_same_thread": False})
-    try:
-        with eng.connect() as conn:
-            assert conn.execute(text("select 1")).scalar() == 1
-    finally:
-        eng.dispose()
 
 
 def test_can_connect_postgres(postgres_url: str):
@@ -60,33 +50,6 @@ def test_alembic_migration_creates_tables(migrated_postgres: str):
                 conn.execute(text("SELECT 1 FROM report_record WHERE 1=0"))
     finally:
         eng.dispose()
-
-
-def test_data_migration_from_sqlite(sqlite_temp_db: str, migrated_postgres: str):
-    # Run the provided migration utility to copy data from sqlite_temp_db → migrated_postgres
-    backend_dir = pathlib.Path(__file__).resolve().parents[1]
-    script = backend_dir / "scripts" / "migrate_sqlite_to_postgres.py"
-    env = os.environ.copy()
-    env.update({
-        "DATABASE_URL": sqlite_temp_db,
-        "POSTGRES_URL": migrated_postgres,
-    })
-    subprocess.run(
-        ["python", str(script), "--source", sqlite_temp_db, "--target", migrated_postgres, "--batch-size", "200"],
-        cwd=str(backend_dir),
-        check=True,
-        env=env,
-    )
-
-    eng = create_engine(migrated_postgres, pool_pre_ping=True, future=True)
-    try:
-        with eng.connect() as conn:
-            for t in ("body", "office", "person", "term", "letters"):
-                cnt = conn.execute(text(f"select count(*) from {t}")).scalar()
-                assert cnt and cnt > 0, f"Expected rows in {t} after migration"
-    finally:
-        eng.dispose()
-
 
 def test_crud_and_relationships(pg_session):
     # Import models after DB is available

@@ -4,8 +4,7 @@ Revision ID: b18e8b9c2a01
 Revises: None
 Create Date: 2025-11-15
 
-This migration creates the initial schema using PostgreSQL-compatible operations.
-It avoids SQLite-specific batch_alter_table and establishes:
+This migration creates the initial schema using native PostgreSQL DDL operations:
   - Tables: body, office, person, term, letters
   - View: report_record (read-only reporting view)
   - Proper foreign key constraints between tables

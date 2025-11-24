@@ -4,21 +4,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from typing import Generator
-from app.config import get_database_url, settings
+from app.config import settings
 
 # Get database URL from config
-DATABASE_URL = get_database_url()
+DATABASE_URL = settings.database_url
 
-# Detect dialect (sqlite vs postgres) and configure engine accordingly
-is_sqlite = DATABASE_URL.startswith("sqlite")
-
-# Create SQLAlchemy engine
-# For SQLite, we need check_same_thread=False to allow usage across threads
+# Create SQLAlchemy engine (PostgreSQL expected)
 engine = create_engine(
     DATABASE_URL,
-    connect_args={"check_same_thread": False} if is_sqlite else {},
-    pool_pre_ping=True,  # helps avoid stale connections (esp. with Postgres)
-    echo=bool(getattr(settings, "debug", False))  # SQL query logging when debug is True
+    pool_pre_ping=True,  # Helps avoid stale PostgreSQL connections
+    echo=settings.debug,
 )
 
 # Create SessionLocal class for database sessions

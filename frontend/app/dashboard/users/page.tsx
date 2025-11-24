@@ -70,13 +70,22 @@ export default function UsersPage() {
                 },
                 body: JSON.stringify({
                     email: inviteEmail,
-                    redirect_url: `${window.location.origin}/dashboard`
+                    redirect_url: `${window.location.origin}/sign-up`
                 }),
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.detail || 'Failed to send invitation');
+                let errorMessage = `Failed to send invitation (HTTP ${response.status})`;
+                try {
+                    const errorData = await response.json();
+                    if (errorData.detail) {
+                        errorMessage = errorData.detail;
+                    }
+                } catch (e) {
+                    // If we can't parse JSON, use the generic message
+                    errorMessage = `Failed to send invitation: ${response.statusText}`;
+                }
+                throw new Error(errorMessage);
             }
 
             await response.json();
@@ -92,7 +101,8 @@ export default function UsersPage() {
 
         } catch (error) {
             console.error('Error inviting user:', error);
-            setError(error instanceof Error ? error.message : 'Failed to send invitation');
+            const errorMsg = error instanceof Error ? error.message : 'Failed to send invitation';
+            setError(errorMsg);
         } finally {
             setInviting(false);
         }

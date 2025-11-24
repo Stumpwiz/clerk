@@ -1,10 +1,10 @@
 """
-Pytest fixtures for database-backed tests across SQLite and PostgreSQL.
+Pytest fixtures for database-backed tests using PostgreSQL (via Docker or env).
 
 - Provides `postgres_url` from env (skips tests if not provided)
 - Runs Alembic migrations against PostgreSQL before tests
 - Provides a clean SQLAlchemy Session bound to PostgreSQL
-- Provides a temporary SQLite database URL and prepopulated schema/data
+- Provides a Docker-backed temporary PostgreSQL database for integration tests
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ import subprocess
 from typing import Iterator
 
 import pytest
+import docker
+from time import sleep
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 
@@ -74,27 +76,48 @@ def pg_session(migrated_postgres: str) -> Iterator[Session]:
         engine.dispose()
 
 
-@pytest.fixture()
-def sqlite_temp_db(tmp_path: pathlib.Path) -> str:
-    # Create a temporary SQLite file URL
-    sqlite_file = tmp_path / "source.sqlite"
-    url = f"sqlite:///{sqlite_file}"
+@pytest.fixture(scope="session")
+def postgres_test_db() -> Iterator[str]:
+    """
+    Spin up a temporary PostgreSQL container for testing.
+    Uses Docker to create an isolated test database.
+    """
+    client = docker.from_env()
 
-    # Create tables and minimal seed data using ORM metadata
-    _ensure_backend_on_path()
-    from app.database import Base
-    import app.models  # ensure models imported
-    engine = create_engine(url, connect_args={"check_same_thread": False})
+    # Start PostgreSQL container
+    container = client.containers.run(
+        "postgres:18.1-alpine",
+        environment={
+            "POSTGRES_USER": "test_user",
+            "POSTGRES_PASSWORD": "test_password",
+            "POSTGRES_DB": "test_clerk_db",
+        },
+        ports={"5432/tcp": None},  # Random host port
+        detach=True,
+        remove=True,
+    )
+
+    # Get the mapped port
+    container.reload()
+    port = container.ports["5432/tcp"][0]["HostPort"]
+    db_url = f"postgresql://test_user:test_password@localhost:{port}/test_clerk_db"
+
+    # Wait for PostgreSQL to be ready
+    max_attempts = 30
+    for _ in range(max_attempts):
+        try:
+            engine = create_engine(db_url)
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            break
+        except Exception:
+            sleep(0.5)
+    else:
+        container.stop()
+        raise RuntimeError("PostgreSQL container failed to start")
+
     try:
-        Base.metadata.create_all(engine)
-        with engine.begin() as conn:
-            # Seed some basic rows to migrate
-            conn.execute(text("INSERT INTO body (name, mission, body_precedence) VALUES ('Housing Authority','Serve community',1.0)"))
-            conn.execute(text("INSERT INTO office (title, office_precedence, office_body_id) VALUES ('Chair', 1.0, 1)"))
-            conn.execute(text("INSERT INTO person (first,last,email,phone,apt) VALUES ('Ada','Lovelace','ada@example.com','555-0000',NULL)"))
-            conn.execute(text('INSERT INTO term (termpersonid, termofficeid, start, "end", ordinal) VALUES (1,1,NULL,NULL, :ord)'), {"ord": "1st"})
-            conn.execute(text("INSERT INTO letters (header, body) VALUES ('Welcome','Welcome to the community!')"))
+        yield db_url
     finally:
-        engine.dispose()
-
-    return url
+        # Cleanup
+        container.stop()

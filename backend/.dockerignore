@@ -29,6 +29,7 @@ Thumbs.db
 
 # Database (don't copy to image, use volume)
 instance/
+# Database files (excluding any local database files from Docker image)
 *.db
 *.db-journal
 
@@ -36,7 +37,7 @@ instance/
 files_letters/*.pdf
 files_letters/*.txt
 files_roster_reports/*.pdf
-files_roster_reports/*.tex
+# Note: .tex templates are NOT generated, they are source files needed for PDF generation
 
 # Testing
 .pytest_cache/

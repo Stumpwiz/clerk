@@ -3,7 +3,7 @@
 Wait for the database to be reachable before starting the backend.
 
 Designed for PostgreSQL URLs, but will also treat non-Postgres URLs as ready
-immediately (so local SQLite dev doesn't block).
+immediately.
 
 Features:
 - Reads DATABASE_URL from the environment via app.config
@@ -45,10 +45,8 @@ def get_db_url() -> str:
 
 
 def make_engine(url: str) -> Engine:
-    is_sqlite = url.startswith("sqlite")
     return create_engine(
         url,
-        connect_args={"check_same_thread": False} if is_sqlite else {},
         pool_pre_ping=True,
         future=True,
     )

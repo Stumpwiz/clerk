@@ -2,7 +2,7 @@
 
 import type { Body, Office, Person, Term, LetterTemplate, ApiError } from './types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.mrrc.online';
 
 class ApiClient {
   private baseUrl: string;
@@ -42,7 +42,7 @@ class ApiClient {
 
   // Bodies
   async getBodies(): Promise<Body[]> {
-    return this.request<Body[]>('/api/bodies');
+    return this.request<Body[]>('/api/bodies/');
   }
 
   async getBody(id: number): Promise<Body> {
@@ -50,7 +50,7 @@ class ApiClient {
   }
 
   async createBody(data: Omit<Body, 'body_id'>): Promise<Body> {
-    return this.request<Body>('/api/bodies', {
+    return this.request<Body>('/api/bodies/', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -71,7 +71,7 @@ class ApiClient {
 
   // Offices
   async getOffices(): Promise<Office[]> {
-    return this.request<Office[]>('/api/offices');
+    return this.request<Office[]>('/api/offices/');
   }
 
   async getOffice(id: number): Promise<Office> {
@@ -79,7 +79,7 @@ class ApiClient {
   }
 
   async createOffice(data: Omit<Office, 'office_id'>): Promise<Office> {
-    return this.request<Office>('/api/offices', {
+    return this.request<Office>('/api/offices/', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -100,7 +100,7 @@ class ApiClient {
 
   // Persons
   async getPersons(): Promise<Person[]> {
-    return this.request<Person[]>('/api/persons');
+    return this.request<Person[]>('/api/persons/');
   }
 
   async getPerson(id: number): Promise<Person> {
@@ -108,7 +108,7 @@ class ApiClient {
   }
 
   async createPerson(data: Omit<Person, 'person_id'>): Promise<Person> {
-    return this.request<Person>('/api/persons', {
+    return this.request<Person>('/api/persons/', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -129,7 +129,7 @@ class ApiClient {
 
   // Terms
   async getTerms(): Promise<Term[]> {
-    return this.request<Term[]>('/api/terms');
+    return this.request<Term[]>('/api/terms/');
   }
 
   async getTerm(personId: number, officeId: number): Promise<Term> {
@@ -137,7 +137,7 @@ class ApiClient {
   }
 
   async createTerm(data: Term): Promise<Term> {
-    return this.request<Term>('/api/terms', {
+    return this.request<Term>('/api/terms/', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -158,11 +158,11 @@ class ApiClient {
 
   // Letter Template
   async getLetterTemplate(): Promise<LetterTemplate> {
-    return this.request<LetterTemplate>('/api/letter-template');
+    return this.request<LetterTemplate>('/api/letter-template/');
   }
 
   async updateLetterTemplate(data: Omit<LetterTemplate, 'id'>): Promise<LetterTemplate> {
-    return this.request<LetterTemplate>('/api/letter-template', {
+    return this.request<LetterTemplate>('/api/letter-template/', {
       method: 'PUT',
       body: JSON.stringify(data),
     });

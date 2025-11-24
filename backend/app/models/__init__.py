@@ -6,6 +6,7 @@ from app.models.office import Office
 from app.models.term import Term
 from app.models.report_record import ReportRecord
 from app.models.letters import LetterTemplate
+from app.models.user import User
 
 __all__ = [
     "Body",
@@ -14,4 +15,5 @@ __all__ = [
     "Term",
     "ReportRecord",
     "LetterTemplate",
+    "User",
 ]

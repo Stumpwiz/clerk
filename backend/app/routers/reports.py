@@ -74,7 +74,9 @@ async def generate_long_roster(db: Session = Depends(get_db)):
         # Query all records, sorted by body and office precedence
         records = db.query(ReportRecord).order_by(
             ReportRecord.body_precedence,
-            ReportRecord.office_precedence
+            ReportRecord.office_precedence,
+            ReportRecord.first,
+            ReportRecord.last
         ).all()
 
         # Group by body name
@@ -113,7 +115,9 @@ async def generate_short_roster(db: Session = Depends(get_db)):
         # Query all records, sorted by body and office precedence
         records = db.query(ReportRecord).order_by(
             ReportRecord.body_precedence,
-            ReportRecord.office_precedence
+            ReportRecord.office_precedence,
+            ReportRecord.first,
+            ReportRecord.last
         ).all()
 
         # Group by body name
@@ -154,7 +158,9 @@ async def generate_vacancies_report(db: Session = Depends(get_db)):
             ReportRecord.first.like('(Vacan%')
         ).order_by(
             ReportRecord.body_precedence,
-            ReportRecord.office_precedence
+            ReportRecord.office_precedence,
+            ReportRecord.first,
+            ReportRecord.last
         ).all()
 
         # Group by body and prepare display data
@@ -217,7 +223,9 @@ async def generate_expirations_report(db: Session = Depends(get_db)):
             )
         ).order_by(
             ReportRecord.body_precedence,
-            ReportRecord.office_precedence
+            ReportRecord.office_precedence,
+            ReportRecord.first,
+            ReportRecord.last
         ).all()
 
         # Group by body and format dates

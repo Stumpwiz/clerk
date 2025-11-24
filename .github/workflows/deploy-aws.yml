@@ -1,0 +1,241 @@
+name: Deploy to AWS App Runner
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - '.github/workflows/deploy-aws.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_target:
+        description: 'Choose what to deploy'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - backend
+          - frontend
+
+env:
+  AWS_REGION: us-east-1
+  ECR_BACKEND_REPOSITORY: clerk-backend
+  ECR_FRONTEND_REPOSITORY: clerk-frontend
+  BACKEND_SERVICE_ARN: arn:aws:apprunner:us-east-1:365591166807:service/clerk-backend/181518238ff148e88363a488640dd90d
+  FRONTEND_SERVICE_ARN: arn:aws:apprunner:us-east-1:365591166807:service/clerk-frontend/7d7f42151edb48fb87d706a4cceb2e4a
+  # Production API URL for frontend builds
+  NEXT_PUBLIC_API_URL: https://api.mrrc.online
+
+jobs:
+  deploy-backend:
+    name: Deploy Backend to App Runner
+    runs-on: ubuntu-latest
+    # Deploy backend if triggered manually with 'backend' or 'both', or if backend files changed
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      (github.event.inputs.deploy_target == 'backend' || github.event.inputs.deploy_target == 'both') ||
+      github.event_name == 'push' && 
+      contains(github.event.head_commit.modified, 'backend/')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push backend image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          echo "Building backend image..."
+          docker build -t $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG ./backend
+
+          echo "Tagging as latest..."
+          docker tag $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:latest
+
+          echo "Pushing images to ECR..."
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPOSITORY:latest
+
+          echo "✅ Backend image pushed successfully"
+
+      - name: Deploy to App Runner
+        run: |
+          echo "Triggering App Runner deployment..."
+          aws apprunner start-deployment \
+            --service-arn ${{ env.BACKEND_SERVICE_ARN }} \
+            --region ${{ env.AWS_REGION }}
+
+          echo "✅ Backend deployment initiated"
+
+      - name: Wait for deployment
+        run: |
+          echo "Waiting for deployment to complete (max 10 minutes)..."
+          for i in {1..60}; do
+            STATUS=$(aws apprunner describe-service \
+              --service-arn ${{ env.BACKEND_SERVICE_ARN }} \
+              --region ${{ env.AWS_REGION }} \
+              --query 'Service.Status' \
+              --output text)
+
+            echo "Deployment status: $STATUS (check $i/60)"
+
+            if [ "$STATUS" == "RUNNING" ]; then
+              echo "✅ Backend deployment completed successfully!"
+              exit 0
+            elif [ "$STATUS" == "OPERATION_IN_PROGRESS" ]; then
+              sleep 10
+            else
+              echo "❌ Unexpected status: $STATUS"
+              exit 1
+            fi
+          done
+
+          echo "⚠️ Deployment timed out after 10 minutes"
+          exit 1
+
+      - name: Test backend health
+        run: |
+          echo "Testing backend health endpoint..."
+          sleep 10  # Give the service a moment to stabilize
+
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" https://api.mrrc.online/health)
+
+          if [ "$RESPONSE" == "200" ]; then
+            echo "✅ Backend health check passed!"
+          else
+            echo "❌ Backend health check failed with status $RESPONSE"
+            exit 1
+          fi
+
+  deploy-frontend:
+    name: Deploy Frontend to App Runner
+    runs-on: ubuntu-latest
+    # Deploy frontend if triggered manually with 'frontend' or 'both', or if frontend files changed
+    if: |
+      github.event_name == 'workflow_dispatch' && 
+      (github.event.inputs.deploy_target == 'frontend' || github.event.inputs.deploy_target == 'both') ||
+      github.event_name == 'push' && 
+      contains(github.event.head_commit.modified, 'frontend/')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push frontend image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          echo "Building frontend image with production configuration..."
+          docker build \
+            --build-arg NEXT_PUBLIC_API_URL=${{ env.NEXT_PUBLIC_API_URL }} \
+            --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ secrets.CLERK_PUBLISHABLE_KEY }} \
+            -t $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG \
+            ./frontend
+
+          echo "Tagging as latest..."
+          docker tag $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:latest
+
+          echo "Pushing images to ECR..."
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:latest
+
+          echo "✅ Frontend image pushed successfully"
+
+      - name: Deploy to App Runner
+        run: |
+          echo "Triggering App Runner deployment..."
+          aws apprunner start-deployment \
+            --service-arn ${{ env.FRONTEND_SERVICE_ARN }} \
+            --region ${{ env.AWS_REGION }}
+
+          echo "✅ Frontend deployment initiated"
+
+      - name: Wait for deployment
+        run: |
+          echo "Waiting for deployment to complete (max 10 minutes)..."
+          for i in {1..60}; do
+            STATUS=$(aws apprunner describe-service \
+              --service-arn ${{ env.FRONTEND_SERVICE_ARN }} \
+              --region ${{ env.AWS_REGION }} \
+              --query 'Service.Status' \
+              --output text)
+
+            echo "Deployment status: $STATUS (check $i/60)"
+
+            if [ "$STATUS" == "RUNNING" ]; then
+              echo "✅ Frontend deployment completed successfully!"
+              exit 0
+            elif [ "$STATUS" == "OPERATION_IN_PROGRESS" ]; then
+              sleep 10
+            else
+              echo "❌ Unexpected status: $STATUS"
+              exit 1
+            fi
+          done
+
+          echo "⚠️ Deployment timed out after 10 minutes"
+          exit 1
+
+      - name: Test frontend
+        run: |
+          echo "Testing frontend accessibility..."
+          sleep 10  # Give the service a moment to stabilize
+
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" https://test.mrrc.online)
+
+          if [ "$RESPONSE" == "200" ]; then
+            echo "✅ Frontend health check passed!"
+          else
+            echo "❌ Frontend health check failed with status $RESPONSE"
+            exit 1
+          fi
+
+  notify-completion:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+    if: always()
+
+    steps:
+      - name: Check deployment results
+        run: |
+          echo "==================================="
+          echo "Deployment Summary"
+          echo "==================================="
+          echo "Backend Status: ${{ needs.deploy-backend.result }}"
+          echo "Frontend Status: ${{ needs.deploy-frontend.result }}"
+          echo "==================================="
+
+          if [ "${{ needs.deploy-backend.result }}" == "success" ] && [ "${{ needs.deploy-frontend.result }}" == "success" ]; then
+            echo "✅ All deployments completed successfully!"
+          elif [ "${{ needs.deploy-backend.result }}" == "skipped" ] && [ "${{ needs.deploy-frontend.result }}" == "skipped" ]; then
+            echo "⚠️ No deployments were triggered (no changes detected)"
+          else
+            echo "❌ One or more deployments failed"
+            exit 1
+          fi

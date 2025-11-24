@@ -29,7 +29,7 @@ yarn-error.log*
 
 # env files
 .env
-.env*.local
+.env.local.backup
 .env.production
 
 # vercel
@@ -42,3 +42,6 @@ next-env.d.ts
 # IDE
 .idea
 .vscode
+
+# clerk configuration (can include secrets)
+/.clerk/

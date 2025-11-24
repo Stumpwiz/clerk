@@ -199,9 +199,9 @@ cd frontend
 # Install dependencies
 npm install
 
-# Create .env.local with your Clerk keys
-cp .env.local.example .env.local
-# Edit .env.local and add your credentials
+# Create .env.local.backup with your Clerk keys
+cp .env.local.backup.example .env.local.backup
+# Edit .env.local.backup and add your credentials
 
 # Start the frontend
 npm run dev

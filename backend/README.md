@@ -2,19 +2,18 @@
 
 This directory contains the FastAPI backend for the Retirement Community Management System.
 
-## Database Configuration (SQLite or PostgreSQL)
+## Database Configuration (PostgreSQL)
 
-The backend supports both SQLite (default for quick local dev) and PostgreSQL (recommended for development/production).
+> Note: This application requires PostgreSQL 18.1 or later. SQLite is not supported.
+
+The backend uses PostgreSQL for all environments (development, staging, production).
 
 - Configure the database using the `DATABASE_URL` environment variable.
 - The application auto-detects the dialect based on the URL and configures SQLAlchemy accordingly.
 
-Examples:
+Examples (PostgreSQL):
 
-- SQLite (file-based):
-  - `DATABASE_URL=sqlite:///./instance/community_admin.db`
-- PostgreSQL (with psycopg2 driver):
-  - `DATABASE_URL=postgresql+psycopg2://USERNAME:PASSWORD@HOST:PORT/DBNAME`
+- `DATABASE_URL=postgresql://USERNAME:PASSWORD@HOST:PORT/DBNAME`
 
 See `.env.example` in this folder for a ready-to-copy template.
 
@@ -26,9 +25,7 @@ pip install -r requirements.txt
 
 Note: PostgreSQL requires the driver. We use `psycopg2-binary` which is already included in `requirements.txt`.
 
-### PostgreSQL 18.1 — Local installation and migration from SQLite
-
-This project provides a complete, cross‑platform workflow to move your local development environment from SQLite to PostgreSQL.
+### PostgreSQL 18.1 — Local installation
 
 #### Install PostgreSQL 18.1 locally
 - Windows/macOS/Linux installers: https://www.postgresql.org/download/
@@ -48,7 +45,7 @@ This project provides a complete, cross‑platform workflow to move your local d
     - `POSTGRES_USER=clerk_user`
     - `POSTGRES_PASSWORD=clerk_password`
 
-#### One‑command local setup and migration
+#### One‑command local setup
 - Linux/macOS:
   ```bash
   bash backend/scripts/local_migrate_to_postgres.sh
@@ -64,7 +61,6 @@ What the script does:
 - Grants necessary privileges and sets public schema ownership
 - Exports `DATABASE_URL` for the current session
 - Resets Alembic state safely and runs migrations to `head`
-- Optionally migrates data from your local SQLite DB (`backend/instance/community_admin.db`) into PostgreSQL
 - Validates the setup by running `backend/scripts/test_models.py`
 
 Notes:
@@ -106,17 +102,15 @@ Ensure `DATABASE_URL` is set in your environment or `.env` before running.
 
 ### Docker and Docker Compose
 
-This backend can run against SQLite or PostgreSQL inside Docker. The images now embed a startup orchestrator that:
+This backend runs against PostgreSQL inside Docker. The images embed a startup orchestrator that:
 
 Startup sequence inside container:
 1. `backend/scripts/docker_start.py` resolves `DATABASE_URL` (or POSTGRES_* envs)
-2. If the URL is PostgreSQL:
-   - Calls `backend/scripts/wait_for_db.py` to poll until the DB accepts connections
-   - Runs `alembic upgrade head` to apply pending migrations
-3. Starts `uvicorn app.main:app`
+2. Calls `backend/scripts/wait_for_db.py` to poll until the DB accepts connections
+3. Runs `alembic upgrade head` to apply pending migrations
+4. Starts `uvicorn app.main:app`
 
 Notes:
-- For SQLite URLs, the wait/migrate steps are skipped and the API starts immediately.
 - You can disable the auto‑migrate step by setting `DISABLE_AUTO_MIGRATE=true` on the backend service.
 
 #### Compose for PostgreSQL
@@ -142,16 +136,6 @@ Ports:
 - Frontend: http://localhost:3000
 - Postgres: localhost:5432
 
-#### Local dev overrides (SQLite by default)
-
-`docker-compose.override.yml` provides local overrides that default the backend to SQLite and bind‑mount source code for live development.
-
-To run with default compose (SQLite):
-```
-docker-compose up --build
-```
-
-To switch the default override to PostgreSQL, export a Postgres `DATABASE_URL` before running compose, or use the Postgres compose file as shown above.
 
 #### Manual healthcheck considerations
 
@@ -195,7 +179,7 @@ Two helper scripts are provided under `backend/scripts` to streamline database s
 
 2) `wait_for_db.py` — wait for the database to be ready
 - Purpose: In container environments, ensure PostgreSQL is reachable before starting the API.
-- Behavior: For PostgreSQL URLs, it retries `SELECT 1` with exponential backoff until success or timeout. Non‑Postgres URLs (like SQLite) are treated as immediately ready.
+- Behavior: Retries `SELECT 1` with exponential backoff until success or timeout.
 - Usage examples:
   - Wait up to 120s for DB:
     ```
@@ -216,38 +200,11 @@ python backend/scripts/wait_for_db.py --timeout 120 -- alembic upgrade head && u
 
 This guarantees the backend only starts after PostgreSQL is accepting connections and the database schema is migrated to the latest Alembic revision.
 
-## Migrating from SQLite to PostgreSQL
 
-You can bring your existing local data along:
+## PostgreSQL environments
 
-- Automated as part of the platform scripts:
-  - On Linux/macOS: `backend/scripts/local_migrate_to_postgres.sh`
-  - On Windows: `backend/scripts/local_migrate_to_postgres.bat`
-  - By default, the script will ask whether to migrate data from the default SQLite path `backend/instance/community_admin.db`.
-  - Override the SQLite source via `DATABASE_URL_SQLITE` env var, e.g. `sqlite:///C:/path/to/community_admin.db` (Windows) or `sqlite:////absolute/path/community_admin.db` (Unix).
-
-- Manual migration (one‑off):
-  ```bash
-  # Ensure Alembic has created the tables on PostgreSQL first
-  alembic upgrade head
-
-  # Then run the data migration utility
-  python backend/scripts/migrate_sqlite_to_postgres.py \
-      --source sqlite:///./backend/instance/community_admin.db \
-      --target postgresql://clerk_user:clerk_password@localhost:5432/clerk_community_admin
-  ```
-
-## Switching between SQLite (dev) and PostgreSQL (staging)
-
-- SQLite (default, fast local dev):
-  - `DATABASE_URL=sqlite:///./backend/instance/community_admin.db`
-  - Pros: zero setup; Cons: limited concurrency and feature set
-
-- PostgreSQL (recommended for staging/production and robust local dev):
-  - `DATABASE_URL=postgresql://clerk_user:clerk_password@localhost:5432/clerk_community_admin`
-  - Or provide `POSTGRES_*` env vars; the app assembles the URL automatically
-
-- Alembic and the app both consume `DATABASE_URL` first; if missing, they call `app.config.get_database_url()` which reads `POSTGRES_*`.
+- PostgreSQL is required for all environments (development, staging, production).
+- Provide `DATABASE_URL` or `POSTGRES_*` env vars; the app assembles the URL automatically if needed.
 
 ## Troubleshooting
 
@@ -285,12 +242,12 @@ You can bring your existing local data along:
   - Confirm the target schema matches the baseline migration.
 
 - Windows quoting/path issues
-  - Use double quotes around paths; prefer the provided `.bat` script. Example SQLite URL: `sqlite:///C:/full/path/community_admin.db`.
+  - Use double quotes around paths; prefer the provided `.bat` script.
 
 - macOS with Homebrew PostgreSQL
   - Ensure your PATH includes the keg: `export PATH="/opt/homebrew/opt/libpq/bin:$PATH"`.
 
-## Backups and Restores (SQLite, PostgreSQL, and AWS RDS)
+## Backups and Restores (PostgreSQL and AWS RDS)
 
 For detailed procedures, see `docs/backup-restore-guide.md`.
 

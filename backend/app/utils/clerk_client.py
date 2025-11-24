@@ -73,7 +73,8 @@ class ClerkClient:
         try:
             payload = {
                 "email_address": email_address,
-                "public_metadata": {}
+                "public_metadata": {},
+                "notify": True  # Clerk requires this to send the invitation email
             }
 
             if redirect_url:
@@ -84,6 +85,26 @@ class ClerkClient:
                 headers=self.headers,
                 json=payload
             )
+
+            # If there's an error, try to get the detailed error message
+            if not response.ok:
+                error_detail = "Unknown error"
+                try:
+                    error_data = response.json()
+                    # Clerk API returns errors in various formats
+                    if "errors" in error_data:
+                        error_detail = str(error_data["errors"])
+                    elif "message" in error_data:
+                        error_detail = error_data["message"]
+                    elif "error" in error_data:
+                        error_detail = error_data["error"]
+                    else:
+                        error_detail = str(error_data)
+                except Exception:
+                    error_detail = response.text or f"HTTP {response.status_code}"
+
+                raise Exception(f"Clerk API error ({response.status_code}): {error_detail}")
+
             response.raise_for_status()
             return response.json()
         except requests.RequestException as e:

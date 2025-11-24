@@ -11,7 +11,7 @@ This script reads the database URL the same way Alembic does:
   - Fall back to env var `DATABASE_URL`
   - Finally, fall back to value in alembic.ini if needed (not used here)
 
-It is safe to run multiple times. Works for PostgreSQL and SQLite.
+Resets Alembic migration state for PostgreSQL database
 """
 
 from __future__ import annotations
@@ -40,8 +40,7 @@ def get_database_url() -> str:
 
 def main() -> None:
     url = get_database_url()
-    engine = create_engine(url, pool_pre_ping=True, future=True,
-                           connect_args={"check_same_thread": False} if url.startswith("sqlite") else {})
+    engine = create_engine(url, pool_pre_ping=True)
     ddl = "DROP TABLE IF EXISTS alembic_version"
     # For PostgreSQL, CASCADE is not necessary, but harmless if present.
     if url.startswith("postgresql"):

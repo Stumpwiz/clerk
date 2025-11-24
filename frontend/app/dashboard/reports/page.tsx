@@ -19,6 +19,14 @@ interface ReportButton {
 }
 
 const REPORTS: ReportButton[] = [
+    // Alphabetical order: Expiring Terms, Long Form Roster, Short Form Roster, Vacancies Report
+    {
+        id: 'expirations',
+        label: 'Expiring Terms',
+        endpoint: '/api/reports/expirations',
+        filename: 'expirations_report.pdf',
+        description: 'Terms expiring this year'
+    },
     {
         id: 'long-roster',
         label: 'Long Form Roster',
@@ -39,13 +47,6 @@ const REPORTS: ReportButton[] = [
         endpoint: '/api/reports/vacancies',
         filename: 'vacancies_report.pdf',
         description: 'List of all currently vacant positions'
-    },
-    {
-        id: 'expirations',
-        label: 'Expiring Terms',
-        endpoint: '/api/reports/expirations',
-        filename: 'expirations_report.pdf',
-        description: 'Terms expiring this year'
     }
 ];
 
@@ -65,8 +66,8 @@ export default function ReportsPage() {
             setLoading(true);
             setError(null);
 
-            // Fetch list of available PDFs from the backend
-            const response = await fetch(`${API_BASE_URL}/api/reports/pdfs`);
+            // Fetch list of available PDFs from the backend with cache busting
+            const response = await fetch(`${API_BASE_URL}/api/reports/pdfs?_=${Date.now()}`);
 
             if (!response.ok) {
                 throw new Error('Failed to fetch PDF list');
@@ -74,10 +75,10 @@ export default function ReportsPage() {
 
             const data = await response.json();
 
-            // Map to PDFFile format with proper URLs
+            // Map to PDFFile format with proper URLs and cache-busting timestamps
             const files: PDFFile[] = data.map((file: {filename: string}) => ({
                 filename: file.filename,
-                url: `${API_BASE_URL}/api/reports/pdfs/${file.filename}`
+                url: `${API_BASE_URL}/api/reports/pdfs/${file.filename}?_=${Date.now()}`
             }));
 
             setPdfFiles(files);
@@ -107,8 +108,8 @@ export default function ReportsPage() {
             setSelectedPdf(report.filename);
 
         } catch (error) {
-            console.error(`Error generating ${report.label}:`, error);
-            setError(`Failed to generate ${report.label}: ${error}`);
+            console.error(`Error refreshing ${report.label}:`, error);
+            setError(`Failed to refresh ${report.label}: ${error}`);
         } finally {
             setGeneratingReports(prev => {
                 const newSet = new Set(prev);
@@ -126,7 +127,9 @@ export default function ReportsPage() {
 
         const pdfFile = pdfFiles.find(f => f.filename === selectedPdf);
         if (pdfFile) {
-            window.open(pdfFile.url, '_blank');
+            // Add fresh cache-busting timestamp when opening
+            const freshUrl = `${API_BASE_URL}/api/reports/pdfs/${selectedPdf}?_=${Date.now()}`;
+            window.open(freshUrl, '_blank');
         }
     };
 
@@ -143,7 +146,7 @@ export default function ReportsPage() {
             <div>
                 <h1 className="text-3xl font-bold text-gray-900">Rosters & Reports</h1>
                 <p className="mt-2 text-sm text-gray-600">
-                    Generate and view rosters and reports from the database
+                    Refresh and view rosters and reports from the database
                 </p>
             </div>
 
@@ -164,12 +167,12 @@ export default function ReportsPage() {
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Left Column - Generate Reports */}
+                {/* Left Column - Refresh Reports */}
                 <div className="bg-white shadow rounded-lg">
                     <div className="px-6 py-4 border-b border-gray-200">
-                        <h2 className="text-xl font-semibold text-gray-900">Generate Reports</h2>
+                        <h2 className="text-xl font-semibold text-gray-900">Refresh Reports</h2>
                         <p className="mt-1 text-sm text-gray-600">
-                            Click to generate or refresh reports
+                            Click to refresh reports with the latest data
                         </p>
                     </div>
                     <div className="p-6">
@@ -198,12 +201,12 @@ export default function ReportsPage() {
                                                 {isGenerating ? (
                                                     <>
                                                         <Loader2 className="animate-spin h-4 w-4 mr-1"/>
-                                                        Generating...
+                                                        Refreshing...
                                                     </>
                                                 ) : (
                                                     <>
                                                         <FileText className="h-4 w-4 mr-1"/>
-                                                        Generate
+                                                        Refresh
                                                     </>
                                                 )}
                                             </button>
@@ -219,7 +222,7 @@ export default function ReportsPage() {
                                 <div>
                                     <h4 className="text-sm font-medium text-blue-900">About Reports</h4>
                                     <p className="mt-1 text-sm text-blue-700">
-                                        Reports are generated from the current database. Generating a report
+                                        Reports are refreshed from the current database. Refreshing a report
                                         will overwrite any previous version with the latest data.
                                     </p>
                                 </div>
@@ -283,9 +286,9 @@ export default function ReportsPage() {
                                 <div className="flex">
                                     <AlertCircle className="h-5 w-5 text-yellow-600 mr-3 flex-shrink-0"/>
                                     <div>
-                                        <h4 className="text-sm font-medium text-yellow-900">No Reports Generated</h4>
+                                        <h4 className="text-sm font-medium text-yellow-900">No Reports Available</h4>
                                         <p className="mt-1 text-sm text-yellow-700">
-                                            Click the Generate buttons to create reports from the current database.
+                                            Click the Refresh buttons to update reports with the latest data from the current database.
                                         </p>
                                     </div>
                                 </div>

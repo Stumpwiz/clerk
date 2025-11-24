@@ -82,13 +82,6 @@ except Exception:
 target_metadata = Base.metadata
 
 
-def _is_sqlite_url(url: str) -> bool:
-    try:
-        return url.startswith("sqlite")
-    except Exception:
-        return False
-
-
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
@@ -104,7 +97,6 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         compare_type=True,
-        render_as_batch=_is_sqlite_url(url),
     )
 
     with context.begin_transaction():
@@ -126,7 +118,6 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
-            render_as_batch=(connection.dialect.name == "sqlite"),
         )
 
         with context.begin_transaction():
