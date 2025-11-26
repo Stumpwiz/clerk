@@ -539,7 +539,7 @@ export default function TermsPage() {
                 disabled={!!editingTerm}
               >
                 <option value={0}>Select an office...</option>
-                {offices.map((office) => (
+                {sortedOffices.map((office) => (
                   <option key={office.office_id} value={office.office_id}>
                     {office.title} ({getBodyName(office.office_id)})
                   </option>
