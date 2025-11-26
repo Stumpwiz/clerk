@@ -1,10 +1,10 @@
 # app/utils/pdf_generator.py - PDF generation utilities for rosters and reports
 
-import os
 import subprocess
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, Any
 from jinja2 import Environment, FileSystemLoader
 
 
@@ -105,6 +105,11 @@ class PDFGenerator:
 
         return pdf_path
 
-    def get_generation_timestamp(self) -> str:
-        """Get formatted timestamp for report generation"""
-        return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    @staticmethod
+    def get_generation_timestamp() -> str:
+        """Get formatted timestamp for report generation in Eastern Time (ET)"""
+        # Use America/New_York timezone which automatically handles EST/EDT
+        eastern = ZoneInfo("America/New_York")
+        now_eastern = datetime.now(eastern)
+        # Format with timezone abbreviation (EST or EDT)
+        return now_eastern.strftime("%Y-%m-%d %H:%M:%S %Z")
