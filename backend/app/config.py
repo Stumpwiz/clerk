@@ -28,6 +28,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "https://test.mrrc.online",
         "https://api.mrrc.online",
+        "https://clerk.mrrc.online",
     ]
 
     @field_validator('cors_origins', mode='before')
@@ -52,6 +53,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = False
         env_file_encoding = 'utf-8'
+        extra = 'ignore'  # Allow extra fields from other projects' .env files
 
 
 # Create the settings instance
