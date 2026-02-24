@@ -1,0 +1,236 @@
+CLERK APPLICATION - SESSION RESTART CONTEXT
+==========================================
+
+## System Setup
+- Remote Development: Windows machine (blacksun, 10.0.0.193) → Nvidia Spark (wintermute, 10.0.0.226)
+- Project Location: /home/geo/Projects/Python/clerk
+- Branch: master
+
+## Current Working State
+
+### Local Development (wintermute)
+- Docker Compose running backend + frontend
+- Backend: http://10.0.0.226:8000
+- Frontend: http://10.0.0.226:3000
+- Database: AWS RDS PostgreSQL (clerk-db.c4agslv7s5zu.us-east-1.rds.amazonaws.com)
+
+### Production (AWS App Runner)
+- Frontend: https://test.mrrc.online
+- Backend API: https://api.mrrc.online
+- Database: Same AWS RDS as local
+- Future domain ready: https://clerk.mrrc.online (CORS already configured)
+
+## How to Start/Stop Services
+
+### Start Everything
+```bash
+cd /home/geo/Projects/Python/clerk
+docker-compose up -d
+```
+
+### Stop Everything
+```bash
+docker-compose down
+```
+
+### View Logs
+```bash
+docker-compose logs -f
+docker-compose logs -f backend
+docker-compose logs -f frontend
+```
+
+### Restart After Code Changes
+```bash
+docker-compose up -d --build
+```
+
+## Key Configuration Files
+
+### Environment Variables (.env)
+```
+DATABASE_URL=postgresql+psycopg2://clerk_user:ClerkAdmin_2025!@clerk-db.c4agslv7s5zu.us-east-1.rds.amazonaws.com:5432/clerk_community_admin?sslmode=require
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://10.0.0.226:3000,http://wintermute:3000
+CLERK_SECRET_KEY=sk_test_kCsPpWAJp7lvAg4cqHgsNKysgYyjM5gP2Qkey6dEKa
+CLERK_PUBLISHABLE_KEY=pk_test_Y3V0ZS1tb25rZXktMjUuY2xlcmsuYWNjb3VudHMuZGV2JA
+```
+
+### Docker Compose Key Settings
+- Frontend API URL: http://10.0.0.226:8000
+- Backend CORS: Allows 10.0.0.226:3000
+- Uses AWS RDS (not local PostgreSQL)
+
+## AWS Production Configuration
+
+### Backend Environment Variables (App Runner)
+```
+API_HOST=0.0.0.0
+API_PORT=8000
+CLERK_PUBLISHABLE_KEY=pk_test_Y3V0ZS1tb25rZXktMjUuY2xlcmsuYWNjb3VudHMuZGV2JA
+CLERK_SECRET_KEY=sk_test_kCsPpWAJp7lvAg4cqHgsNKysgYyjM5gP2Qkey6dEKa
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,https://test.mrrc.online,https://api.mrrc.online,https://clerk.mrrc.online
+DATABASE_URL=postgresql+psycopg2://clerk_user:ClerkAdmin_2025!@clerk-db.c4agslv7s5zu.us-east-1.rds.amazonaws.com:5432/clerk_community_admin?sslmode=require
+POSTGRES_DB=clerk_community_admin
+POSTGRES_HOST=clerk-db.c4agslv7s5zu.us-east-1.rds.amazonaws.com
+POSTGRES_PASSWORD=ClerkAdmin_2025!
+POSTGRES_PORT=5432
+POSTGRES_USER=clerk_user
+```
+
+### AWS Resources
+- Backend Service ARN: arn:aws:apprunner:us-east-1:365591166807:service/clerk-backend/181518238ff148e88363a488640dd90d
+- Frontend Service ARN: arn:aws:apprunner:us-east-1:365591166807:service/clerk-frontend/7d7f42151edb48fb87d706a4cceb2e4a
+- ECR Backend Repo: clerk-backend
+- ECR Frontend Repo: clerk-frontend
+- AWS Region: us-east-1
+
+## Common Tasks
+
+### Deploy to Production
+```bash
+python scripts/deploy_to_aws.py --target both
+python scripts/deploy_to_aws.py --target backend
+python scripts/deploy_to_aws.py --target frontend
+```
+
+### Update CORS Origins (Production)
+See: docs/cors-configuration.md
+
+Quick command to get current config:
+```bash
+aws apprunner describe-service \
+  --service-arn "arn:aws:apprunner:us-east-1:365591166807:service/clerk-backend/181518238ff148e88363a488640dd90d" \
+  --region us-east-1 \
+  --query 'Service.SourceConfiguration.ImageRepository.ImageConfiguration.RuntimeEnvironmentVariables' \
+  --output json
+```
+
+### Check Production Service Status
+```bash
+aws apprunner describe-service \
+  --service-arn "arn:aws:apprunner:us-east-1:365591166807:service/clerk-backend/181518238ff148e88363a488640dd90d" \
+  --region us-east-1 \
+  --query 'Service.Status' \
+  --output text
+```
+
+### View Production Logs
+```bash
+# Backend logs
+aws logs tail /aws/apprunner/clerk-backend/181518238ff148e88363a488640dd90d/application \
+  --region us-east-1 --since 30m --follow
+
+# Service logs
+aws logs tail /aws/apprunner/clerk-backend/181518238ff148e88363a488640dd90d/service \
+  --region us-east-1 --since 30m --follow
+```
+
+## Database Connection
+
+### Connection String
+```
+postgresql+psycopg2://clerk_user:ClerkAdmin_2025!@clerk-db.c4agslv7s5zu.us-east-1.rds.amazonaws.com:5432/clerk_community_admin?sslmode=require
+```
+
+**Important**:
+- Driver must be `postgresql+psycopg2://` (not just `postgresql://`)
+- Must include `?sslmode=require` for AWS RDS
+- Password: `ClerkAdmin_2025!`
+
+### Direct Database Access
+```bash
+psql "postgresql://clerk_user:ClerkAdmin_2025!@clerk-db.c4agslv7s5zu.us-east-1.rds.amazonaws.com:5432/clerk_community_admin?sslmode=require"
+```
+
+## Recent Changes Made
+
+1. ✅ Fixed local Docker Compose for remote access (10.0.0.226)
+2. ✅ Created deployment script: scripts/deploy_to_aws.py
+3. ✅ Fixed production CORS to allow test.mrrc.online
+4. ✅ Fixed DATABASE_URL format (added +psycopg2 and sslmode=require)
+5. ✅ Pre-configured CORS for future clerk.mrrc.online domain
+6. ✅ Created CORS documentation: docs/cors-configuration.md
+
+## Known Issues / Notes
+
+- Local PostgreSQL is commented out in docker-compose.yml (uses AWS RDS instead)
+- Clerk authentication uses development keys (pk_test_... / sk_test_...)
+- Frontend shows cookie warnings in dev mode over HTTP (expected, works fine)
+- Both local and production use the same AWS RDS database
+- Git status shows all files modified (newlines/formatting changes)
+
+## Useful Links
+
+- Frontend (Local): http://10.0.0.226:3000
+- Backend API (Local): http://10.0.0.226:8000
+- API Docs (Local): http://10.0.0.226:8000/docs
+- Frontend (Prod): https://test.mrrc.online
+- Backend API (Prod): https://api.mrrc.online
+- API Docs (Prod): https://api.mrrc.online/docs
+
+## Quick Health Checks
+
+### Local
+```bash
+curl http://10.0.0.226:8000/health
+curl http://10.0.0.226:8000/api/bodies/ | head -20
+```
+
+### Production
+```bash
+curl https://api.mrrc.online/health
+curl https://api.mrrc.online/api/bodies/ | head -20
+```
+
+### Test CORS
+```bash
+# Production
+curl -I -X OPTIONS https://api.mrrc.online/api/bodies/ \
+  -H "Origin: https://test.mrrc.online" \
+  -H "Access-Control-Request-Method: GET" | grep access-control
+```
+
+## Troubleshooting
+
+### Can't connect to local services
+1. Check Docker is running: `docker ps`
+2. Check services are up: `docker-compose ps`
+3. View logs: `docker-compose logs -f`
+
+### CORS errors in production
+1. Check current CORS config (see commands above)
+2. Verify domain is in CORS_ORIGINS list
+3. Wait 5-10 minutes after updating (service restart time)
+
+### Database connection errors
+1. Verify DATABASE_URL format includes `+psycopg2` and `?sslmode=require`
+2. Check password is correct: `ClerkAdmin_2025!`
+3. Test connection with psql (see command above)
+
+### Production deployment fails
+1. Check AWS credentials: `aws sts get-caller-identity`
+2. Verify Docker is running: `docker --version`
+3. Check ECR login: `aws ecr get-login-password --region us-east-1`
+
+## Files to Reference
+
+- README.md - General project documentation
+- backend/README.md - Backend setup and configuration
+- docs/cors-configuration.md - CORS management guide
+- scripts/deploy_to_aws.py - Production deployment script
+- docker-compose.yml - Local development setup
+- .env - Local environment variables (gitignored)
+- backend/app/config.py - Backend configuration defaults
+
+## Next Steps (Future)
+
+- [ ] Create CNAME: clerk.mrrc.online → frontend App Runner URL
+- [ ] Consider switching to production Clerk keys
+- [ ] Set up automated backups for RDS
+- [ ] Consider adding staging environment
+- [ ] Update GitHub Actions to auto-deploy on push to main/master
+
+===========================================
+Last Updated: 2026-01-10
+Session State: All services working (local + production)
+===========================================
