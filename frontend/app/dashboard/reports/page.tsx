@@ -47,6 +47,27 @@ const REPORTS: ReportButton[] = [
         endpoint: '/api/reports/vacancies',
         filename: 'vacancies_report.pdf',
         description: 'List of all currently vacant positions'
+    },
+    {
+        id: 'rc-officers',
+        label: 'RC Officers Email List',
+        endpoint: '/api/reports/rc-officers',
+        filename: 'rc_officers.txt',
+        description: 'Residents Council officers email list'
+    },
+    {
+        id: 'rc-officers-and-chairs',
+        label: 'RC Officers + Committee Chairs Email List',
+        endpoint: '/api/reports/rc-officers-and-chairs',
+        filename: 'rc_officers_and_chairs.txt',
+        description: 'Residents Council officers combined with committee chairs'
+    },
+    {
+        id: 'committee-secretaries',
+        label: 'Committee Secretaries Email List',
+        endpoint: '/api/reports/committee-secretaries',
+        filename: 'committee_secretaries.txt',
+        description: 'Committee secretaries email list'
     }
 ];
 
@@ -277,7 +298,7 @@ export default function ReportsPage() {
                                         disabled={!selectedPdf}
                                         className="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        View PDF
+                                        View
                                     </button>
                                 </div>
                             </>

@@ -29,6 +29,9 @@ def _ensure_backend_on_path() -> pathlib.Path:
     return backend_dir
 
 
+_ensure_backend_on_path()
+
+
 def _alembic_upgrade(url: str) -> None:
     env = os.environ.copy()
     env["DATABASE_URL"] = url

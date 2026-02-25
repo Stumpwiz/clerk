@@ -37,6 +37,7 @@ instance/
 files_letters/*.pdf
 files_letters/*.txt
 files_roster_reports/*.pdf
+files_roster_reports/*.txt
 # Note: .tex templates are NOT generated, they are source files needed for PDF generation
 
 # Testing

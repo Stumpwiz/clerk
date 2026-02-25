@@ -6,10 +6,10 @@ from sqlalchemy.orm import Session
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import List, Iterable
 
 from app.database import get_db
-from app.models import ReportRecord
+from app.models import ReportRecord, Term, Person, Office, Body
 from app.utils.pdf_generator import PDFGenerator
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -18,45 +18,131 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 pdf_generator = PDFGenerator()
 
 
+ALLOWED_REPORT_SUFFIXES = {".pdf", ".txt"}
+
+
+def _normalize_email(email: str | None) -> str | None:
+    if email is None:
+        return None
+    cleaned = email.strip()
+    if not cleaned:
+        return None
+    return cleaned
+
+
+def _dedupe_emails(emails: Iterable[str]) -> List[str]:
+    seen = set()
+    ordered = []
+    for email in emails:
+        key = email.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        ordered.append(email)
+    return ordered
+
+
+def _format_email_lines(emails: List[str]) -> str:
+    if not emails:
+        return ""
+    lines = []
+    last_index = len(emails) - 1
+    for index, email in enumerate(emails):
+        suffix = "," if index < last_index else ""
+        lines.append(f"{email}{suffix}")
+    return "\n".join(lines)
+
+
+def _write_text_report(filename: str, emails: List[str]) -> Path:
+    report_path = pdf_generator.reports_dir / filename
+    content = _format_email_lines(emails)
+    with open(report_path, "w", encoding="utf-8") as handle:
+        handle.write(content)
+    return report_path
+
+
+def _query_emails(
+    db: Session,
+    *,
+    body_name: str | None = None,
+    office_title: str | None = None,
+    exclude_body_name: str | None = None,
+) -> List[str]:
+    query = (
+        db.query(Person.email)
+        .select_from(Term)
+        .join(Person, Person.person_id == Term.term_person_id)
+        .join(Office, Office.office_id == Term.term_office_id)
+        .join(Body, Body.body_id == Office.office_body_id)
+    )
+
+    if body_name is not None:
+        query = query.filter(Body.name == body_name)
+    if exclude_body_name is not None:
+        query = query.filter(Body.name != exclude_body_name)
+    if office_title is not None:
+        query = query.filter(Office.title == office_title)
+
+    query = query.order_by(Body.body_precedence.asc(), Office.office_precedence.asc())
+
+    raw_emails = []
+    for (email,) in query.all():
+        cleaned = _normalize_email(email)
+        if cleaned is None:
+            continue
+        raw_emails.append(cleaned)
+
+    return _dedupe_emails(raw_emails)
+
+
 @router.get("/pdfs", response_model=List[dict])
 async def list_report_pdfs():
-    """List all available report PDF files"""
+    """List all available report files"""
     try:
-        pdf_files = []
+        report_files = []
         reports_dir = pdf_generator.reports_dir
 
         if reports_dir.exists():
-            for pdf_file in reports_dir.glob("*.pdf"):
-                pdf_files.append({
-                    "filename": pdf_file.name,
-                    "size": pdf_file.stat().st_size,
-                    "modified": pdf_file.stat().st_mtime
+            for report_file in reports_dir.iterdir():
+                if not report_file.is_file():
+                    continue
+                if report_file.suffix not in ALLOWED_REPORT_SUFFIXES:
+                    continue
+                report_files.append({
+                    "filename": report_file.name,
+                    "size": report_file.stat().st_size,
+                    "modified": report_file.stat().st_mtime
                 })
 
         # Sort by filename
-        pdf_files.sort(key=lambda x: x["filename"])
-        return pdf_files
+        report_files.sort(key=lambda x: x["filename"])
+        return report_files
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/pdfs/{filename}")
-async def serve_report_pdf(filename: str):
-    """Serve a specific report PDF file"""
+async def serve_report_file(filename: str):
+    """Serve a specific report file"""
     try:
-        # Security: Only allow PDF files and prevent path traversal
-        if not filename.endswith(".pdf") or "/" in filename or "\\" in filename:
+        # Security: Only allow known report types and prevent path traversal
+        if "/" in filename or "\\" in filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+        report_path = pdf_generator.reports_dir / filename
+        if report_path.suffix not in ALLOWED_REPORT_SUFFIXES:
             raise HTTPException(status_code=400, detail="Invalid filename")
 
-        pdf_path = pdf_generator.reports_dir / filename
+        if not report_path.exists():
+            raise HTTPException(status_code=404, detail="Report not found")
 
-        if not pdf_path.exists():
-            raise HTTPException(status_code=404, detail="PDF not found")
+        media_type = "application/pdf"
+        if report_path.suffix == ".txt":
+            media_type = "text/plain; charset=utf-8"
 
         return FileResponse(
-            path=str(pdf_path),
-            media_type="application/pdf",
+            path=str(report_path),
+            media_type=media_type,
             filename=filename,
             headers={"Content-Disposition": f"inline; filename={filename}"}
         )
@@ -257,5 +343,68 @@ async def generate_expirations_report(db: Session = Depends(get_db)):
             headers={"Content-Disposition": "inline; filename=expirations_report.pdf"}
         )
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/rc-officers")
+async def generate_rc_officers_email_list(db: Session = Depends(get_db)):
+    """Generate Residents Council officers email list"""
+    try:
+        emails = _query_emails(db, body_name="Residents Council")
+        report_path = _write_text_report("rc_officers.txt", emails)
+        return FileResponse(
+            path=str(report_path),
+            media_type="text/plain; charset=utf-8",
+            filename="rc_officers.txt",
+            headers={"Content-Disposition": "inline; filename=rc_officers.txt"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/rc-officers-and-chairs")
+async def generate_rc_officers_and_chairs_email_list(db: Session = Depends(get_db)):
+    """Generate combined RC officers + committee chairs email list"""
+    try:
+        officers = _query_emails(db, body_name="Residents Council")
+        chairs = _query_emails(
+            db,
+            office_title="Chair",
+            exclude_body_name="Residents Council"
+        )
+        combined = _dedupe_emails(officers + chairs)
+        report_path = _write_text_report("rc_officers_and_chairs.txt", combined)
+        return FileResponse(
+            path=str(report_path),
+            media_type="text/plain; charset=utf-8",
+            filename="rc_officers_and_chairs.txt",
+            headers={"Content-Disposition": "inline; filename=rc_officers_and_chairs.txt"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _get_committee_secretaries_emails(db: Session) -> List[str]:
+    """Helper to query committee secretaries emails"""
+    return _query_emails(
+        db,
+        office_title="Secretary",
+        exclude_body_name="Residents Council"
+    )
+
+
+@router.get("/committee-secretaries")
+async def generate_committee_secretaries_email_list(db: Session = Depends(get_db)):
+    """Generate committee secretaries email list"""
+    try:
+        emails = _get_committee_secretaries_emails(db)
+        report_path = _write_text_report("committee_secretaries.txt", emails)
+        return FileResponse(
+            path=str(report_path),
+            media_type="text/plain; charset=utf-8",
+            filename="committee_secretaries.txt",
+            headers={"Content-Disposition": "inline; filename=committee_secretaries.txt"}
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
