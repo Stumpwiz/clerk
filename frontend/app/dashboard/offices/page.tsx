@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { api } from "@/lib/api";
 import { type Body, type Office } from "@/lib/types";
-import { Plus, Edit2, Trash2 } from "lucide-react";
+import { Plus, Edit2, Trash2, CircleHelp } from "lucide-react";
 import { Toast } from "@/components/toast";
 
 interface OfficeFormData {
@@ -12,6 +12,9 @@ interface OfficeFormData {
 }
 
 export default function BodiesOfficesPage() {
+  const PRECEDENCE_HELP_TEXT =
+    "This field sets where the office sorts when the roster is created. For example, to set the Treasurer to appear after the Secretary, set Treasurer precedence to 3 and Secretary precedence to 4. To insert a new office of Past Chair to appear between Vice Chair and Treasurer, set that new office's precedence to 2.5.";
+
   const [bodies, setBodies] = useState<Body[]>([]);
   const [offices, setOffices] = useState<Office[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +31,9 @@ export default function BodiesOfficesPage() {
     office_precedence: 0,
   });
   const [officeSaving, setOfficeSaving] = useState(false);
+  const [isPrecedenceHelpOpen, setIsPrecedenceHelpOpen] = useState(false);
+  const precedenceHelpButtonRef = useRef<HTMLButtonElement | null>(null);
+  const precedenceHelpPopoverRef = useRef<HTMLDivElement | null>(null);
 
   // Toast state
   const [toast, setToast] = useState<{
@@ -38,6 +44,41 @@ export default function BodiesOfficesPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!isPrecedenceHelpOpen) return;
+
+    const handleMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        precedenceHelpButtonRef.current?.contains(target) ||
+        precedenceHelpPopoverRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setIsPrecedenceHelpOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsPrecedenceHelpOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isPrecedenceHelpOpen]);
+
+  useEffect(() => {
+    if (isPrecedenceHelpOpen) {
+      precedenceHelpPopoverRef.current?.focus();
+    }
+  }, [isPrecedenceHelpOpen]);
 
   const loadData = async () => {
     try {
@@ -250,13 +291,45 @@ export default function BodiesOfficesPage() {
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Precedence *
-                          </label>
+                          <div className="relative inline-flex items-center gap-1 text-sm font-medium text-gray-700 mb-1 align-middle">
+                            <label className="block align-middle">
+                              Precedence *
+                            </label>
+                            <button
+                              type="button"
+                              ref={precedenceHelpButtonRef}
+                              aria-label="Help: Precedence"
+                              aria-expanded={isPrecedenceHelpOpen}
+                              aria-controls="precedence-help-popover"
+                              aria-haspopup="dialog"
+                              onClick={() => setIsPrecedenceHelpOpen((open) => !open)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  setIsPrecedenceHelpOpen((open) => !open);
+                                }
+                              }}
+                              className="inline-flex items-center justify-center text-gray-500 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded ms-1 align-middle"
+                            >
+                              <CircleHelp className="w-4 h-4" />
+                            </button>
+                            {isPrecedenceHelpOpen && (
+                              <div
+                                ref={precedenceHelpPopoverRef}
+                                id="precedence-help-popover"
+                                tabIndex={-1}
+                                className="absolute left-0 top-full mt-2 w-96 max-w-[24rem] text-sm leading-snug text-gray-700 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-50"
+                                role="dialog"
+                                aria-live="polite"
+                              >
+                                {PRECEDENCE_HELP_TEXT}
+                              </div>
+                            )}
+                          </div>
                           <input
                             type="number"
                             value={officeFormData.office_precedence}
-                            onChange={(e) => setOfficeFormData({ ...officeFormData, office_precedence: parseFloat(e.target.value) })}
+                            onChange={(e) => setOfficeFormData({ ...officeFormData, office_precedence: e.target.value === "" ? 0 : parseFloat(e.target.value) })}
                             step="0.1"
                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                             required
@@ -326,7 +399,7 @@ export default function BodiesOfficesPage() {
                                   <input
                                     type="number"
                                     value={officeFormData.office_precedence}
-                                    onChange={(e) => setOfficeFormData({ ...officeFormData, office_precedence: parseFloat(e.target.value) })}
+                                    onChange={(e) => setOfficeFormData({ ...officeFormData, office_precedence: e.target.value === "" ? 0 : parseFloat(e.target.value) })}
                                     step="0.1"
                                     className="w-32 px-2 py-1 border border-gray-300 rounded text-gray-900"
                                   />
