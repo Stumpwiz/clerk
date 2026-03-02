@@ -4,7 +4,7 @@ import {useState, useEffect} from 'react';
 import {Loader2, FileText, Clock, AlertCircle} from 'lucide-react';
 
 const API_BASE_URL =
-    process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://wintermute:8000";
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://api.mrrc.online";
 
 interface PDFFile {
     filename: string;
