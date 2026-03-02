@@ -5,7 +5,12 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Dict, Any
+from fastapi import HTTPException
 from jinja2 import Environment, FileSystemLoader
+
+
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_TEMPLATE_DIR = BACKEND_ROOT / "files_roster_reports"
 
 
 class PDFGenerator:
@@ -19,13 +24,12 @@ class PDFGenerator:
             reports_dir: Directory containing templates and generated files
         """
         # Get absolute path to reports directory
-        backend_dir = Path(__file__).parent.parent.parent
-        self.reports_dir = backend_dir / reports_dir
+        self.reports_dir = BACKEND_ROOT / reports_dir
         self.reports_dir.mkdir(parents=True, exist_ok=True)
 
         # Configure Jinja2 environment for LaTeX
         self.jinja_env = Environment(
-            loader=FileSystemLoader(str(self.reports_dir)),
+            loader=FileSystemLoader(str(DEFAULT_TEMPLATE_DIR)),
             block_start_string='\\BLOCK{',
             block_end_string='}',
             variable_start_string='\\VAR{',
@@ -60,8 +64,15 @@ class PDFGenerator:
         tex_path = self.reports_dir / tex_filename
         pdf_path = self.reports_dir / pdf_filename
 
-        # Render template
-        template = self.jinja_env.get_template(template_name)
+        template_path = DEFAULT_TEMPLATE_DIR / template_name
+        if not template_path.exists():
+            raise HTTPException(
+                status_code=500,
+                detail=f"Report template not found at {template_path}"
+            )
+
+        template_source = template_path.read_text(encoding="utf-8")
+        template = self.jinja_env.from_string(template_source)
         rendered_tex = template.render(**context)
 
         # Write .tex file

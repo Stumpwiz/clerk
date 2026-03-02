@@ -1,10 +1,12 @@
 # app/main.py - FastAPI application entry point
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends
+from typing import List
+from urllib.parse import urlparse
+
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from typing import List
 
 from app.config import settings
 from app.database import get_db
@@ -14,12 +16,21 @@ from app.models import ReportRecord
 from app.routers import bodies, offices, persons, terms, letters, reports, users
 
 
+def _db_host_and_name(database_url: str) -> tuple[str, str]:
+    parsed = urlparse(database_url) if database_url else None
+    if not parsed:
+        return ("", "")
+    db_name = parsed.path.lstrip("/") if parsed.path else ""
+    return (parsed.hostname or "", db_name)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Lifespan context manager for startup and shutdown events"""
     # Startup
     print(f"*** {settings.app_name} started ***")
-    print(f"Database: {settings.database_url}")
+    db_host, db_name = _db_host_and_name(settings.database_url)
+    print(f"Database: host={db_host} name={db_name}")
     print(f"API Docs: http://{settings.api_host}:{settings.api_port}/docs")
     yield
     # Shutdown (if needed in the future)
@@ -35,7 +46,24 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+import traceback
+from fastapi import Request
+
+
+@app.middleware("http")
+async def log_exceptions(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception:
+        print("\n=== UNHANDLED EXCEPTION ===")
+        print(f"{request.method} {request.url}")
+        traceback.print_exc()
+        print("=== END EXCEPTION ===\n")
+        raise
+
+
 # Configure CORS
+print("CORS ORIGINS:", settings.cors_origins)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

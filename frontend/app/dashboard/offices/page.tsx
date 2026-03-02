@@ -32,7 +32,7 @@ export default function BodiesOfficesPage() {
   });
   const [officeSaving, setOfficeSaving] = useState(false);
   const [isPrecedenceHelpOpen, setIsPrecedenceHelpOpen] = useState(false);
-  const precedenceHelpButtonRef = useRef<HTMLButtonElement | null>(null);
+  const precedenceHelpHeaderButtonRef = useRef<HTMLButtonElement | null>(null);
   const precedenceHelpPopoverRef = useRef<HTMLDivElement | null>(null);
 
   // Toast state
@@ -51,7 +51,7 @@ export default function BodiesOfficesPage() {
     const handleMouseDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (
-        precedenceHelpButtonRef.current?.contains(target) ||
+        precedenceHelpHeaderButtonRef.current?.contains(target) ||
         precedenceHelpPopoverRef.current?.contains(target)
       ) {
         return;
@@ -291,41 +291,9 @@ export default function BodiesOfficesPage() {
                           />
                         </div>
                         <div>
-                          <div className="relative inline-flex items-center gap-1 text-sm font-medium text-gray-700 mb-1 align-middle">
-                            <label className="block align-middle">
-                              Precedence *
-                            </label>
-                            <button
-                              type="button"
-                              ref={precedenceHelpButtonRef}
-                              aria-label="Help: Precedence"
-                              aria-expanded={isPrecedenceHelpOpen}
-                              aria-controls="precedence-help-popover"
-                              aria-haspopup="dialog"
-                              onClick={() => setIsPrecedenceHelpOpen((open) => !open)}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                  event.preventDefault();
-                                  setIsPrecedenceHelpOpen((open) => !open);
-                                }
-                              }}
-                              className="inline-flex items-center justify-center text-gray-500 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded ms-1 align-middle"
-                            >
-                              <CircleHelp className="w-4 h-4" />
-                            </button>
-                            {isPrecedenceHelpOpen && (
-                              <div
-                                ref={precedenceHelpPopoverRef}
-                                id="precedence-help-popover"
-                                tabIndex={-1}
-                                className="absolute left-0 top-full mt-2 w-96 max-w-[24rem] text-sm leading-snug text-gray-700 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-50"
-                                role="dialog"
-                                aria-live="polite"
-                              >
-                                {PRECEDENCE_HELP_TEXT}
-                              </div>
-                            )}
-                          </div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Precedence *
+                          </label>
                           <input
                             type="number"
                             value={officeFormData.office_precedence}
@@ -372,7 +340,39 @@ export default function BodiesOfficesPage() {
                               Title
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Precedence
+                              <div className="relative inline-flex items-center gap-1">
+                                <span>Precedence</span>
+                                <button
+                                  type="button"
+                                  ref={precedenceHelpHeaderButtonRef}
+                                  aria-label="Help: Precedence"
+                                  aria-expanded={isPrecedenceHelpOpen}
+                                  aria-controls="precedence-help-popover"
+                                  aria-haspopup="dialog"
+                                  onClick={() => setIsPrecedenceHelpOpen((open) => !open)}
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter" || event.key === " ") {
+                                      event.preventDefault();
+                                      setIsPrecedenceHelpOpen((open) => !open);
+                                    }
+                                  }}
+                                  className="inline-flex items-center justify-center text-gray-500 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 rounded ms-1 align-middle"
+                                >
+                                  <CircleHelp className="w-4 h-4" />
+                                </button>
+                                {isPrecedenceHelpOpen && (
+                                  <div
+                                    ref={precedenceHelpPopoverRef}
+                                    id="precedence-help-popover"
+                                    tabIndex={-1}
+                                    className="absolute left-0 top-full mt-2 w-96 max-w-[24rem] text-sm leading-snug text-gray-700 bg-white border border-gray-200 rounded-lg shadow-lg p-3 z-50 normal-case"
+                                    role="dialog"
+                                    aria-live="polite"
+                                  >
+                                    {PRECEDENCE_HELP_TEXT}
+                                  </div>
+                                )}
+                              </div>
                             </th>
                             <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Actions

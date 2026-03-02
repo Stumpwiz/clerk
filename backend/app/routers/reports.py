@@ -11,11 +11,12 @@ from typing import List, Iterable
 from app.database import get_db
 from app.models import ReportRecord, Term, Person, Office, Body
 from app.utils.pdf_generator import PDFGenerator
+from app.config import settings
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
 
 # Initialize PDF generator
-pdf_generator = PDFGenerator()
+pdf_generator = PDFGenerator(settings.roster_reports_dir)
 
 
 ALLOWED_REPORT_SUFFIXES = {".pdf", ".txt"}
@@ -56,8 +57,15 @@ def _format_email_lines(emails: List[str]) -> str:
 def _write_text_report(filename: str, emails: List[str]) -> Path:
     report_path = pdf_generator.reports_dir / filename
     content = _format_email_lines(emails)
-    with open(report_path, "w", encoding="utf-8") as handle:
-        handle.write(content)
+    try:
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(report_path, "w", encoding="utf-8") as handle:
+            handle.write(content)
+    except (PermissionError, OSError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to write report file at {report_path}: {exc}"
+        ) from exc
     return report_path
 
 
@@ -93,6 +101,43 @@ def _query_emails(
         raw_emails.append(cleaned)
 
     return _dedupe_emails(raw_emails)
+
+
+def _build_vacancies_dataset(db: Session) -> tuple[List[ReportRecord], dict[str, List[ReportRecord]]]:
+    # Query records where first name starts with "(Vacan"
+    records = db.query(ReportRecord).filter(
+        ReportRecord.first.like('(Vacan%')
+    ).order_by(
+        ReportRecord.body_precedence,
+        ReportRecord.office_precedence,
+        ReportRecord.first,
+        ReportRecord.last
+    ).all()
+
+    # Group by body and prepare display data
+    grouped = defaultdict(list)
+    processed = []
+    for record in records:
+        # Check if truly vacant
+        is_vacant = (
+                record.first and
+                record.first.startswith("(Vacan") and
+                record.last == " "
+        )
+
+        # Create display name
+        if is_vacant:
+            full_name = record.first
+        else:
+            full_name = f"{record.first or ''} {record.last or ''}".strip()
+
+        # Add custom attributes for template
+        record.is_vacant = is_vacant
+        record.incumbent_display = full_name
+        grouped[record.name].append(record)
+        processed.append(record)
+
+    return processed, dict(grouped)
 
 
 @router.get("/pdfs", response_model=List[dict])
@@ -239,42 +284,13 @@ async def generate_short_roster(db: Session = Depends(get_db)):
 async def generate_vacancies_report(db: Session = Depends(get_db)):
     """Generate report of vacant positions"""
     try:
-        # Query records where first name starts with "(Vacan"
-        records = db.query(ReportRecord).filter(
-            ReportRecord.first.like('(Vacan%')
-        ).order_by(
-            ReportRecord.body_precedence,
-            ReportRecord.office_precedence,
-            ReportRecord.first,
-            ReportRecord.last
-        ).all()
-
-        # Group by body and prepare display data
-        grouped = defaultdict(list)
-        for record in records:
-            # Check if truly vacant
-            is_vacant = (
-                    record.first and
-                    record.first.startswith("(Vacan") and
-                    record.last == " "
-            )
-
-            # Create display name
-            if is_vacant:
-                full_name = record.first
-            else:
-                full_name = f"{record.first or ''} {record.last or ''}".strip()
-
-            # Add custom attributes for template
-            record.is_vacant = is_vacant
-            record.incumbent_display = full_name
-            grouped[record.name].append(record)
+        _, grouped = _build_vacancies_dataset(db)
 
         # Generate PDF
         context = {
             "generated": pdf_generator.get_generation_timestamp(),
             "title": "Vacancies",
-            "grouped": dict(grouped)
+            "grouped": grouped
         }
 
         pdf_path = pdf_generator.generate_pdf(
@@ -289,6 +305,32 @@ async def generate_vacancies_report(db: Session = Depends(get_db)):
             filename="vacancies_report.pdf",
             headers={"Content-Disposition": "inline; filename=vacancies_report.pdf"}
         )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/vacancies/data", response_model=List[dict])
+async def get_vacancies_data(db: Session = Depends(get_db)):
+    """Return vacancies dataset used for the vacancies report"""
+    try:
+        records, _ = _build_vacancies_dataset(db)
+        data = []
+        for record in records:
+            person_name = None
+            if not record.is_vacant:
+                person_name = record.incumbent_display or None
+            data.append({
+                "body_name": record.name,
+                "office_title": record.title,
+                "is_vacant": record.is_vacant,
+                "person_name": person_name,
+                "term_start": record.start.isoformat() if record.start else None,
+                "term_end": record.end.isoformat() if record.end else None,
+            })
+
+        data.sort(key=lambda item: (item["body_name"] or "", item["office_title"] or ""))
+        return data
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

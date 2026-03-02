@@ -3,7 +3,8 @@
 import {useState, useEffect} from 'react';
 import {Loader2, FileText, Clock, AlertCircle} from 'lucide-react';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL =
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://wintermute:8000";
 
 interface PDFFile {
     filename: string;
@@ -97,7 +98,7 @@ export default function ReportsPage() {
             const data = await response.json();
 
             // Map to PDFFile format with proper URLs and cache-busting timestamps
-            const files: PDFFile[] = data.map((file: {filename: string}) => ({
+            const files: PDFFile[] = data.map((file: { filename: string }) => ({
                 filename: file.filename,
                 url: `${API_BASE_URL}/api/reports/pdfs/${file.filename}?_=${Date.now()}`
             }));
@@ -260,7 +261,7 @@ export default function ReportsPage() {
                             Select a report to view or download
                         </p>
                     </div>
-                                                <div className="p-6">
+                    <div className="p-6">
                         {pdfFiles.length > 0 ? (
                             <>
                                 <div className="mb-4">
@@ -309,7 +310,8 @@ export default function ReportsPage() {
                                     <div>
                                         <h4 className="text-sm font-medium text-yellow-900">No Reports Available</h4>
                                         <p className="mt-1 text-sm text-yellow-700">
-                                            Click the Refresh buttons to update reports with the latest data from the current database.
+                                            Click the Refresh buttons to update reports with the latest data from the
+                                            current database.
                                         </p>
                                     </div>
                                 </div>
