@@ -1,6 +1,6 @@
 # Backend - FastAPI Application
 
-This directory contains the FastAPI backend for the Retirement Community Management System.
+This is the FastAPI backend for the Retirement Community Management System.
 
 ## Database Configuration (PostgreSQL)
 
