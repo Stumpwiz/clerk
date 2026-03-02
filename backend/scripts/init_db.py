@@ -19,7 +19,7 @@ Usage examples (from backend/ or project root):
   python backend/scripts/init_db.py --create --migrate --seed
 
 Environment:
-  - Reads DATABASE_URL via app.config (or .env) and Alembic env.py.
+  - Reads DATABASE_URL via app.config (or oldEnv) and Alembic env.py.
 """
 
 from __future__ import annotations

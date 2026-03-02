@@ -76,7 +76,7 @@ cover/
 *.pot
 
 # Environments
-.env
+oldEnv
 .env.local
 .venv
 env/

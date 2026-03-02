@@ -124,9 +124,9 @@ cd clerk-community-admin
 
 ```bash
 # Copy the example file
-cp .env.docker.example .env
+cp oldEnv.docker.example oldEnv
 
-# Edit .env and add your Clerk credentials:
+# Edit oldEnv and add your Clerk credentials:
 # CLERK_SECRET_KEY=sk_test_...
 # CLERK_PUBLISHABLE_KEY=pk_test_...
 ```
@@ -199,9 +199,9 @@ cd frontend
 # Install dependencies
 npm install
 
-# Create .env.local.backup with your Clerk keys
-cp .env.local.backup.example .env.local.backup
-# Edit .env.local.backup and add your credentials
+# Create oldEnv.local.backup with your Clerk keys
+cp oldEnv.local.backup.example oldEnv.local.backup
+# Edit oldEnv.local.backup and add your credentials
 
 # Start the frontend
 npm run dev

@@ -264,11 +264,11 @@ def build_and_push_frontend(registry_url: str, project_root: Path) -> bool:
     frontend_path = project_root / "frontend"
     image_tag = f"{registry_url}/{CONFIG['ecr_frontend_repository']}"
 
-    # Get Clerk publishable key from environment or .env
+    # Get Clerk publishable key from environment or oldEnv
     clerk_key = os.getenv('CLERK_PUBLISHABLE_KEY', '')
     if not clerk_key:
-        # Try to read from .env file
-        env_file = project_root / ".env"
+        # Try to read from oldEnv file
+        env_file = project_root / "oldEnv"
         if env_file.exists():
             with open(env_file) as f:
                 for line in f:
@@ -277,7 +277,7 @@ def build_and_push_frontend(registry_url: str, project_root: Path) -> bool:
                         break
 
     if not clerk_key:
-        print_warning("CLERK_PUBLISHABLE_KEY not found in environment or .env file")
+        print_warning("CLERK_PUBLISHABLE_KEY not found in environment or oldEnv file")
         print_warning("Frontend build may fail if Clerk authentication is required")
 
     # Build image with production configuration

@@ -34,7 +34,7 @@ from sqlalchemy.engine import Engine
 
 
 def get_db_url() -> str:
-    # Defer to app.config which resolves .env and path corrections
+    # Defer to app.config which resolves oldEnv and path corrections
     try:
         from app.config import get_database_url
 

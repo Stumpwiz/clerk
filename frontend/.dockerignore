@@ -13,7 +13,6 @@ build
 .env*
 .env.local
 .env.local.backup
-.env.production
 
 # Testing
 coverage

@@ -14,7 +14,7 @@ import sys
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
-# Load .env if present
+# Load oldEnv if present
 try:
     from dotenv import load_dotenv  # type: ignore
 

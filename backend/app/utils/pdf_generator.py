@@ -1,13 +1,13 @@
 # app/utils/pdf_generator.py - PDF generation utilities for rosters and reports
 
 import subprocess
+import shutil
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Dict, Any
 from fastapi import HTTPException
 from jinja2 import Environment, FileSystemLoader
-
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TEMPLATE_DIR = BACKEND_ROOT / "files_roster_reports"
@@ -86,6 +86,15 @@ class PDFGenerator:
                 aux_file.unlink()
 
         # Compile with xelatex
+        logo_source = BACKEND_ROOT / "static" / "residentCouncilLogoSmall.jpg"
+        logo_target = self.reports_dir / "residentCouncilLogoSmall.jpg"
+        if not logo_source.exists():
+            raise HTTPException(
+                status_code=500,
+                detail=f"Report logo not found at {logo_source}"
+            )
+        shutil.copyfile(logo_source, logo_target)
+
         result = subprocess.run(
             [
                 "xelatex",
@@ -108,8 +117,8 @@ class PDFGenerator:
             )
             raise RuntimeError(error_msg)
 
-        # Clean up auxiliary files including the .tex source
-        for ext in [".aux", ".log", ".tex"]:
+        # Clean up auxiliary files (keep .log for debugging)
+        for ext in [".aux", ".tex"]:
             aux_file = self.reports_dir / f"{output_name}{ext}"
             if aux_file.exists():
                 aux_file.unlink()

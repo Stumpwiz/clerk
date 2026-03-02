@@ -6,8 +6,8 @@ set -e
 echo "🚀 Starting Clerk Application..."
 echo ""
 
-# Check if .env file exists
-if [ ! -f .env ]; then
+# Check if oldEnv file exists
+if [ ! -f oldEnv ]; then
     echo "❌ Error: .env file not found!"
     echo ""
     echo "Please create a .env file from .env.docker.example:"
