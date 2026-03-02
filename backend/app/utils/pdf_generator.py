@@ -117,8 +117,8 @@ class PDFGenerator:
             )
             raise RuntimeError(error_msg)
 
-        # Clean up auxiliary files (keep .log for debugging)
-        for ext in [".aux", ".tex"]:
+        # Clean up auxiliary files
+        for ext in [".aux", ".tex", ".log", ".synctex.gz"]:
             aux_file = self.reports_dir / f"{output_name}{ext}"
             if aux_file.exists():
                 aux_file.unlink()

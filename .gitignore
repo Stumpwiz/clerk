@@ -4,6 +4,8 @@ backend/instance/
 backend/files_letters/*.pdf
 backend/files_letters/*.tex
 backend/files_roster_reports/*.pdf
+backend/.env
+backend/files_roster_reports/*.txt
 .context/
 docs/
 
