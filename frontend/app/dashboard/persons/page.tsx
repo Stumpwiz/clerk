@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import type { Person } from "@/lib/types";
 import { Plus, Edit2, Trash2 } from "lucide-react";
@@ -19,6 +19,8 @@ export default function PersonsPage() {
   const [persons, setPersons] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const personRowRefs = useRef<Record<number, HTMLTableRowElement | null>>({});
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -31,6 +33,7 @@ export default function PersonsPage() {
     apt: "",
   });
   const [formError, setFormError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Toast state
@@ -119,6 +122,7 @@ export default function PersonsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+    setPhoneError(null);
 
     // Validation
     if (!formData.first.trim() || !formData.last.trim()) {
@@ -126,16 +130,26 @@ export default function PersonsPage() {
       return;
     }
 
+    const phoneDigits = (formData.phone || "").replace(/\D/g, "");
+    if (phoneDigits.length !== 0 && phoneDigits.length !== 10) {
+      setPhoneError("Phone number must contain exactly 10 digits");
+      return;
+    }
+
     try {
       setSubmitting(true);
+      const payload = {
+        ...formData,
+        phone: phoneDigits.length === 10 ? phoneDigits : "",
+      };
 
       if (editingPerson) {
         // Update existing person
-        await api.updatePerson(editingPerson.person_id, formData);
+        await api.updatePerson(editingPerson.person_id, payload);
         setToast({ message: "Person updated successfully!", type: "success" });
       } else {
         // Create new person
-        await api.createPerson(formData);
+        await api.createPerson(payload);
         setToast({ message: "Person created successfully!", type: "success" });
       }
 
@@ -163,6 +177,44 @@ export default function PersonsPage() {
     }
   };
 
+  const formatPhoneOnBlur = (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    if (digits === "") {
+      setPhoneError(null);
+      return "";
+    }
+    if (digits.length === 10) {
+      setPhoneError(null);
+      return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+    }
+    setPhoneError("Phone number must contain exactly 10 digits");
+    return value;
+  };
+
+  useEffect(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return;
+
+    const matchesStartsWith = persons.find((person) => {
+      const fullName = `${person.first || ""} ${person.last || ""}`.trim().toLowerCase();
+      return fullName.startsWith(query);
+    });
+
+    const match =
+      matchesStartsWith ||
+      persons.find((person) => {
+        const fullName = `${person.first || ""} ${person.last || ""}`.trim().toLowerCase();
+        return fullName.includes(query);
+      });
+
+    if (!match) return;
+
+    const element = personRowRefs.current[match.person_id];
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [searchTerm, persons]);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -185,7 +237,7 @@ export default function PersonsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Persons</h1>
           <p className="mt-2 text-sm text-gray-700">
-            Manage community members and residents
+            Manage community members and residents (a person must be listed below before that person can be assigned a term)
           </p>
         </div>
         <div className="mt-4 sm:mt-0">
@@ -197,6 +249,17 @@ export default function PersonsPage() {
             Add Person
           </button>
         </div>
+      </div>
+
+      <div className="mb-4">
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Type a name to jump to..."
+          aria-label="Search persons"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+        />
       </div>
 
       <div className="bg-white shadow overflow-hidden sm:rounded-lg">
@@ -229,7 +292,13 @@ export default function PersonsPage() {
               </tr>
             ) : (
               persons.map((person) => (
-                <tr key={person.person_id} className="hover:bg-gray-50">
+                <tr
+                  key={person.person_id}
+                  ref={(el) => {
+                    personRowRefs.current[person.person_id] = el;
+                  }}
+                  className="hover:bg-gray-50"
+                >
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {formatPersonName(person)}
                   </td>
@@ -329,8 +398,14 @@ export default function PersonsPage() {
                 id="phone"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                onBlur={(e) =>
+                  setFormData({ ...formData, phone: formatPhoneOnBlur(e.target.value) })
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
               />
+              {phoneError && (
+                <p className="mt-1 text-sm text-red-600">{phoneError}</p>
+              )}
             </div>
 
             <div>

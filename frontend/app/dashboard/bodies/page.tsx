@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import type { Body } from "@/lib/types";
 import { Plus, Edit2, Trash2 } from "lucide-react";
@@ -17,6 +17,8 @@ export default function BodiesPage() {
   const [bodies, setBodies] = useState<Body[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const bodyRowRefs = useRef<Record<number, HTMLTableRowElement | null>>({});
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -127,6 +129,26 @@ export default function BodiesPage() {
     }
   };
 
+  useEffect(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return;
+
+    const matchesStartsWith = bodies.find((body) =>
+      body.name.toLowerCase().startsWith(query)
+    );
+
+    const match =
+      matchesStartsWith ||
+      bodies.find((body) => body.name.toLowerCase().includes(query));
+
+    if (!match) return;
+
+    const element = bodyRowRefs.current[match.body_id];
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [searchTerm, bodies]);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -163,6 +185,17 @@ export default function BodiesPage() {
         </div>
       </div>
 
+      <div className="mb-4">
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Type a name to jump to..."
+          aria-label="Search bodies"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+        />
+      </div>
+
       <div className="bg-white shadow overflow-hidden sm:rounded-lg">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -190,7 +223,13 @@ export default function BodiesPage() {
               </tr>
             ) : (
               bodies.map((body) => (
-                <tr key={body.body_id} className="hover:bg-gray-50">
+                <tr
+                  key={body.body_id}
+                  ref={(el) => {
+                    bodyRowRefs.current[body.body_id] = el;
+                  }}
+                  className="hover:bg-gray-50"
+                >
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {body.name}
                   </td>

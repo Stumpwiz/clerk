@@ -3,7 +3,8 @@
 import {useState, useEffect} from 'react';
 import {Loader2} from 'lucide-react';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL =
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://api.mrrc.online';
 
 interface LetterTemplate {
     id: number | null;
@@ -231,7 +232,7 @@ export default function LettersPage() {
         <div className="space-y-6">
             <div>
                 <h1 className="text-3xl font-bold text-gray-900">Letters and Template Management</h1>
-            </div>
+           </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white shadow rounded-lg">
@@ -245,12 +246,11 @@ export default function LettersPage() {
                                     Letter Date
                                 </label>
                                 <input
-                                    type="text"
+                                    type="date"
                                     id="letter_date"
                                     value={letterDate}
                                     onChange={(e) => setLetterDate(e.target.value)}
                                     onBlur={(e) => validateDate(e.target.value)}
-                                    placeholder="Letter Date (e.g., 2025-09-15)"
                                     required
                                     className={`mt-1 block w-full rounded-md shadow-sm sm:text-sm text-gray-900 placeholder-gray-400 ${
                                         dateError
@@ -258,7 +258,6 @@ export default function LettersPage() {
                                             : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
                                     }`}
                                 />
-                                <p className="mt-1 text-xs text-gray-500">Format: YYYY-MM-DD</p>
                                 {dateError && <p className="mt-1 text-sm text-red-600">{dateError}</p>}
                             </div>
 

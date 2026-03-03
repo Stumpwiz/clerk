@@ -19,6 +19,10 @@ export default function BodiesOfficesPage() {
   const [offices, setOffices] = useState<Office[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [bodySearchTerm, setBodySearchTerm] = useState("");
+  const [officeSearchTerm, setOfficeSearchTerm] = useState("");
+  const bodyItemRefs = useRef<Record<number, HTMLLIElement | null>>({});
+  const officeRowRefs = useRef<Record<number, HTMLTableRowElement | null>>({});
 
   // Selection state
   const [selectedBodyId, setSelectedBodyId] = useState<number | null>(null);
@@ -44,6 +48,26 @@ export default function BodiesOfficesPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    const query = bodySearchTerm.trim().toLowerCase();
+    if (!query) return;
+
+    const matchesStartsWith = bodies.find((body) =>
+      body.name.toLowerCase().startsWith(query)
+    );
+
+    const match =
+      matchesStartsWith ||
+      bodies.find((body) => body.name.toLowerCase().includes(query));
+
+    if (!match) return;
+
+    const element = bodyItemRefs.current[match.body_id];
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [bodySearchTerm, bodies]);
 
   useEffect(() => {
     if (!isPrecedenceHelpOpen) return;
@@ -80,6 +104,36 @@ export default function BodiesOfficesPage() {
     }
   }, [isPrecedenceHelpOpen]);
 
+  // Filter offices for selected body
+  const officesForSelectedBody = useMemo(() => {
+    if (!selectedBodyId) return [];
+    return offices
+      .filter((o) => o.office_body_id === selectedBodyId)
+      .sort((a, b) => (a.office_precedence || 0) - (b.office_precedence || 0));
+  }, [offices, selectedBodyId]);
+
+  useEffect(() => {
+    const query = officeSearchTerm.trim().toLowerCase();
+    if (!query) return;
+
+    const matchesStartsWith = officesForSelectedBody.find((office) =>
+      (office.title || "").toLowerCase().startsWith(query)
+    );
+
+    const match =
+      matchesStartsWith ||
+      officesForSelectedBody.find((office) =>
+        (office.title || "").toLowerCase().includes(query)
+      );
+
+    if (!match) return;
+
+    const element = officeRowRefs.current[match.office_id];
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [officeSearchTerm, officesForSelectedBody]);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -108,14 +162,6 @@ export default function BodiesOfficesPage() {
       setLoading(false);
     }
   };
-
-  // Filter offices for selected body
-  const officesForSelectedBody = useMemo(() => {
-    if (!selectedBodyId) return [];
-    return offices
-      .filter((o) => o.office_body_id === selectedBodyId)
-      .sort((a, b) => (a.office_precedence || 0) - (b.office_precedence || 0));
-  }, [offices, selectedBodyId]);
 
   // Office CRUD handlers
   const handleCreateOffice = async (e: React.FormEvent) => {
@@ -225,13 +271,29 @@ export default function BodiesOfficesPage() {
             </div>
 
             <div className="p-4">
+              <div className="mb-4">
+                <input
+                  type="text"
+                  value={bodySearchTerm}
+                  onChange={(e) => setBodySearchTerm(e.target.value)}
+                  placeholder="Type a name to jump to..."
+                  aria-label="Search bodies"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                />
+              </div>
+
               {/* Bodies List */}
               {bodies.length === 0 ? (
                 <div className="text-center py-6 text-gray-500">No bodies found</div>
               ) : (
                 <ul className="divide-y divide-gray-200">
                   {bodies.map((body) => (
-                    <li key={body.body_id}>
+                    <li
+                      key={body.body_id}
+                      ref={(el) => {
+                        bodyItemRefs.current[body.body_id] = el;
+                      }}
+                    >
                       <button
                         onClick={() => setSelectedBodyId(body.body_id)}
                         className={`w-full text-left px-3 py-3 hover:bg-gray-50 transition-colors ${
@@ -326,6 +388,17 @@ export default function BodiesOfficesPage() {
                     </form>
                   )}
 
+                  <div className="mb-4">
+                    <input
+                      type="text"
+                      value={officeSearchTerm}
+                      onChange={(e) => setOfficeSearchTerm(e.target.value)}
+                      placeholder="Type a name to jump to..."
+                      aria-label="Search offices"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                    />
+                  </div>
+
                   {/* Offices Table */}
                   {officesForSelectedBody.length === 0 ? (
                     <div className="text-center py-6 text-gray-500">
@@ -381,7 +454,13 @@ export default function BodiesOfficesPage() {
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                           {officesForSelectedBody.map((office) => (
-                            <tr key={office.office_id} className="hover:bg-gray-50">
+                            <tr
+                              key={office.office_id}
+                              ref={(el) => {
+                                officeRowRefs.current[office.office_id] = el;
+                              }}
+                              className="hover:bg-gray-50"
+                            >
                               <td className="px-4 py-3">
                                 {editingOfficeId === office.office_id ? (
                                   <input

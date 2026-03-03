@@ -3,7 +3,8 @@
 import {useState, useEffect} from 'react';
 import {Loader2, UserPlus, Mail, Calendar, User as UserIcon} from 'lucide-react';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL =
+    process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://api.mrrc.online';
 
 interface ClerkUser {
     id: string;

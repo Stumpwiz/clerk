@@ -35,6 +35,7 @@ export default function TermsPage() {
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [isOngoing, setIsOngoing] = useState(false);
 
   // Toast state
   const [toast, setToast] = useState<{
@@ -194,6 +195,7 @@ export default function TermsPage() {
       end: "",
       ordinal: "none",
     });
+    setIsOngoing(false);
     setFormError(null);
     setIsModalOpen(true);
   };
@@ -205,14 +207,16 @@ export default function TermsPage() {
     const ordinalValue = term.ordinal && validOrdinals.includes(term.ordinal.toLowerCase()) 
       ? term.ordinal.toLowerCase() 
       : "none";
+    const ongoing = term.end === "9999-12-31";
 
     setFormData({
       term_person_id: term.term_person_id,
       term_office_id: term.term_office_id,
       start: term.start || "",
-      end: term.end || "",
+      end: ongoing ? "9999-12-31" : term.end || "",
       ordinal: ordinalValue,
     });
+    setIsOngoing(ongoing);
     setFormError(null);
     setIsModalOpen(true);
   };
@@ -248,7 +252,7 @@ export default function TermsPage() {
           editingTerm.term_office_id,
           {
             start: formData.start || null,
-            end: formData.end || null,
+            end: isOngoing ? "9999-12-31" : formData.end || null,
             ordinal: formData.ordinal || null,
           }
         );
@@ -259,7 +263,7 @@ export default function TermsPage() {
           term_person_id: formData.term_person_id,
           term_office_id: formData.term_office_id,
           start: formData.start || null,
-          end: formData.end || null,
+          end: isOngoing ? "9999-12-31" : formData.end || null,
           ordinal: formData.ordinal || null,
         });
         setToast({ message: "Term created successfully!", type: "success" });
@@ -452,7 +456,7 @@ export default function TermsPage() {
                     {term.start || "—"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {term.end || "—"}
+                    {term.end === "9999-12-31" ? "Ongoing" : term.end || "—"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {term.ordinal || "—"}
@@ -572,10 +576,30 @@ export default function TermsPage() {
               <input
                 type="date"
                 id="end"
-                value={formData.end}
+                value={isOngoing ? "" : formData.end}
                 onChange={(e) => setFormData({ ...formData, end: e.target.value })}
+                disabled={isOngoing}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
               />
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="ongoing"
+                  checked={isOngoing}
+                  onChange={(e) => {
+                    const next = e.target.checked;
+                    setIsOngoing(next);
+                    setFormData({ ...formData, end: next ? "9999-12-31" : "" });
+                  }}
+                  className="h-4 w-4 border-gray-300 rounded text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="ongoing" className="text-sm text-gray-700">
+                  Ongoing (no end date)
+                </label>
+              </div>
+              {isOngoing && (
+                <p className="mt-1 text-xs text-gray-500">No end date</p>
+              )}
             </div>
 
             <div>
