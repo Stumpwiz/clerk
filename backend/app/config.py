@@ -60,6 +60,11 @@ class Settings(BaseSettings):
 
     # Reports
     roster_reports_dir: str = Field(default="files_roster_reports", validation_alias="ROSTER_REPORTS_DIR")
+    enable_ionos_roster_publish: bool = Field(
+        default=False,
+        validation_alias="ENABLE_IONOS_ROSTER_PUBLISH",
+    )
+    ionos_sftp_secret_name: str = Field(default="", validation_alias="IONOS_SFTP_SECRET_NAME")
 
     model_config = SettingsConfigDict(
         env_file=str(ENV_FILE),

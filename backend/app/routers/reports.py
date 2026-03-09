@@ -1,5 +1,6 @@
 # app/routers/reports.py - API endpoints for roster and report generation
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -11,9 +12,11 @@ from typing import List, Iterable
 from app.database import get_db
 from app.models import ReportRecord, Term, Person, Office, Body
 from app.utils.pdf_generator import PDFGenerator
+from app.utils.ionos_publisher import IONOSPublisherError, upload_pdf_to_ionos
 from app.config import settings
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
+logger = logging.getLogger(__name__)
 
 # Initialize PDF generator
 pdf_generator = PDFGenerator(settings.roster_reports_dir)
@@ -243,6 +246,8 @@ async def generate_long_roster(db: Session = Depends(get_db)):
 async def generate_short_roster(db: Session = Depends(get_db)):
     """Generate short form roster (names and offices only)"""
     try:
+        logger.info("Short roster generation started.")
+
         # Query all records, sorted by body and office precedence
         records = db.query(ReportRecord).order_by(
             ReportRecord.body_precedence,
@@ -268,6 +273,28 @@ async def generate_short_roster(db: Session = Depends(get_db)):
             output_name="short_form_roster",
             context=context
         )
+        logger.info("Short roster generation completed: %s", pdf_path)
+
+        if settings.enable_ionos_roster_publish:
+            logger.info("IONOS short roster publish enabled.")
+            try:
+                publish_result = upload_pdf_to_ionos(
+                    local_pdf_path=pdf_path,
+                    secret_name=settings.ionos_sftp_secret_name,
+                    aws_region=settings.aws_region,
+                )
+                logger.info(
+                    "IONOS short roster publish succeeded: remote_path=%s",
+                    publish_result["remote_path"],
+                )
+            except IONOSPublisherError as exc:
+                # Keep existing FileResponse API contract for this route;
+                # publish status can be surfaced in JSON in a future route revision.
+                logger.warning("IONOS short roster publish failed: %s", exc)
+            except Exception:
+                logger.warning("IONOS short roster publish failed with an unexpected error.")
+        else:
+            logger.info("IONOS short roster publish disabled.")
 
         return FileResponse(
             path=str(pdf_path),
