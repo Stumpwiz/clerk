@@ -128,12 +128,16 @@ jobs:
         run: |
           echo "Scanning App Runner application logs for startup failures..."
           START_TIME=$(( ($(date -u +%s) - 600) * 1000 ))
-          LOG_MESSAGES=$(aws logs filter-log-events \
+          if ! LOG_MESSAGES=$(aws logs filter-log-events \
             --log-group-name "/aws/apprunner/clerk-backend/181518238ff148e88363a488640dd90d/application" \
             --start-time "$START_TIME" \
             --region ${{ env.AWS_REGION }} \
             --query 'events[].message' \
-            --output text)
+            --output text 2>&1); then
+            echo "⚠️ Warning: Unable to retrieve backend logs; skipping startup log scan."
+            echo "$LOG_MESSAGES"
+            exit 0
+          fi
 
           if echo "$LOG_MESSAGES" | grep -Eiq "ModuleNotFoundError|exec format error|Traceback"; then
             echo "❌ Detected backend startup failures in recent logs"

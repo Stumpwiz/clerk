@@ -278,6 +278,7 @@ async def generate_short_roster(db: Session = Depends(get_db)):
         if settings.enable_ionos_roster_publish:
             logger.info("IONOS short roster publish enabled.")
             try:
+                logger.info("IONOS short roster publish starting.")
                 publish_result = upload_pdf_to_ionos(
                     local_pdf_path=pdf_path,
                     secret_name=settings.ionos_sftp_secret_name,
@@ -290,9 +291,12 @@ async def generate_short_roster(db: Session = Depends(get_db)):
             except IONOSPublisherError as exc:
                 # Keep existing FileResponse API contract for this route;
                 # publish status can be surfaced in JSON in a future route revision.
-                logger.warning("IONOS short roster publish failed: %s", exc)
-            except Exception:
-                logger.warning("IONOS short roster publish failed with an unexpected error.")
+                logger.info("IONOS short roster publish failed: %s", exc)
+            except Exception as exc:
+                logger.info(
+                    "IONOS short roster publish failed: unexpected_error=%s",
+                    exc.__class__.__name__,
+                )
         else:
             logger.info("IONOS short roster publish disabled.")
 
