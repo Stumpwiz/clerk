@@ -148,9 +148,14 @@ jobs:
     runs-on: ubuntu-latest
     # Deploy frontend if triggered manually with 'frontend' or 'both', or if frontend files changed
     if: |
-      github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && 
-      (github.event.inputs.deploy_target == 'frontend' || github.event.inputs.deploy_target == 'both'))
+      github.event_name == 'workflow_dispatch' && 
+      (github.event.inputs.deploy_target == 'frontend' || github.event.inputs.deploy_target == 'both') ||
+      github.event_name == 'push' &&
+      (
+        contains(join(github.event.head_commit.modified, ' '), 'frontend/') ||
+        contains(join(github.event.head_commit.added, ' '), 'frontend/') ||
+        contains(join(github.event.head_commit.removed, ' '), 'frontend/')
+      )
 
     steps:
       - name: Checkout code
@@ -253,11 +258,9 @@ jobs:
           echo "Frontend Status: ${{ needs.deploy-frontend.result }}"
           echo "==================================="
 
-          if [ "${{ needs.deploy-backend.result }}" == "success" ] && [ "${{ needs.deploy-frontend.result }}" == "success" ]; then
-            echo "✅ All deployments completed successfully!"
-          elif [ "${{ needs.deploy-backend.result }}" == "skipped" ] && [ "${{ needs.deploy-frontend.result }}" == "skipped" ]; then
-            echo "⚠️ No deployments were triggered (no changes detected)"
-          else
+          if [ "${{ needs.deploy-backend.result }}" == "failure" ] || [ "${{ needs.deploy-backend.result }}" == "cancelled" ] || [ "${{ needs.deploy-frontend.result }}" == "failure" ] || [ "${{ needs.deploy-frontend.result }}" == "cancelled" ]; then
             echo "❌ One or more deployments failed"
             exit 1
+          else
+            echo "✅ Deployment workflow completed without failures"
           fi
