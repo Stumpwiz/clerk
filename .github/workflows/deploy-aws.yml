@@ -2,7 +2,7 @@ name: Deploy to AWS App Runner
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
     paths:
       - 'backend/**'
       - 'frontend/**'
@@ -37,7 +37,11 @@ jobs:
       github.event_name == 'workflow_dispatch' && 
       (github.event.inputs.deploy_target == 'backend' || github.event.inputs.deploy_target == 'both') ||
       github.event_name == 'push' && 
-      contains(github.event.head_commit.modified, 'backend/')
+      (
+        contains(join(github.event.head_commit.modified, ' '), 'backend/') ||
+        contains(join(github.event.head_commit.added, ' '), 'backend/') ||
+        contains(join(github.event.head_commit.removed, ' '), 'backend/')
+      )
 
     steps:
       - name: Checkout code
@@ -119,6 +123,25 @@ jobs:
             echo "❌ Backend health check failed with status $RESPONSE"
             exit 1
           fi
+
+      - name: Scan backend logs for startup errors (last 10 minutes)
+        run: |
+          echo "Scanning App Runner application logs for startup failures..."
+          START_TIME=$(( ($(date -u +%s) - 600) * 1000 ))
+          LOG_MESSAGES=$(aws logs filter-log-events \
+            --log-group-name "/aws/apprunner/clerk-backend/181518238ff148e88363a488640dd90d/application" \
+            --start-time "$START_TIME" \
+            --region ${{ env.AWS_REGION }} \
+            --query 'events[].message' \
+            --output text)
+
+          if echo "$LOG_MESSAGES" | grep -Eiq "ModuleNotFoundError|exec format error|Traceback"; then
+            echo "❌ Detected backend startup failures in recent logs"
+            echo "$LOG_MESSAGES" | grep -Ei "ModuleNotFoundError|exec format error|Traceback" || true
+            exit 1
+          fi
+
+          echo "✅ No startup failure signatures found in recent logs"
 
   deploy-frontend:
     name: Deploy Frontend to App Runner
