@@ -96,15 +96,6 @@ def upload_pdf_to_ionos(
         config["remote_filename"],
     )
     remote_dir = posixpath.dirname(resolved_remote_path) or "/"
-    logger.warning("IONOS upload start: local_pdf_path=%s", path)
-    logger.warning(
-        "IONOS SFTP target: host=%s username=%s port=%s remote_path=%s",
-        config["host"],
-        config["username"],
-        config["port"],
-        resolved_remote_path,
-    )
-    logger.warning("IONOS SFTP secret keys: %s", config["secret_keys"])
 
     transport = None
     sftp = None
@@ -114,7 +105,6 @@ def upload_pdf_to_ionos(
         sftp = paramiko.SFTPClient.from_transport(transport)
         try:
             sftp.stat(remote_dir)
-            logger.warning("IONOS remote directory verified: remote_dir=%s", remote_dir)
         except Exception as exc:
             logger.warning(
                 "IONOS remote directory check failed: remote_dir=%s error=%s",
@@ -123,7 +113,6 @@ def upload_pdf_to_ionos(
             )
             raise
         sftp.put(str(path), resolved_remote_path)
-        logger.warning("IONOS upload succeeded: remote_path=%s", resolved_remote_path)
     except paramiko.SSHException as exc:
         raise IONOSPublisherError("Unable to upload short roster PDF to IONOS via SFTP.") from exc
     except OSError as exc:

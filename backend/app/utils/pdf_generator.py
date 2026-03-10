@@ -1,5 +1,6 @@
 # app/utils/pdf_generator.py - PDF generation utilities for rosters and reports
 
+import logging
 import subprocess
 import shutil
 from datetime import datetime
@@ -8,6 +9,8 @@ from pathlib import Path
 from typing import Dict, Any
 from fastapi import HTTPException
 from jinja2 import Environment, FileSystemLoader
+
+logger = logging.getLogger(__name__)
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TEMPLATE_DIR = BACKEND_ROOT / "files_roster_reports"
@@ -85,15 +88,24 @@ class PDFGenerator:
             if aux_file.exists():
                 aux_file.unlink()
 
-        # Compile with xelatex
+        # Ensure required assets are staged in the report directory
         logo_source = BACKEND_ROOT / "static" / "images" / "residentCouncilLogoSmall.jpg"
         logo_target = self.reports_dir / "residentCouncilLogoSmall.jpg"
+
+        # Verify logo source exists
         if not logo_source.exists():
+            logger.error(
+                "Required report asset not found: %s",
+                logo_source.resolve()
+            )
             raise HTTPException(
                 status_code=500,
-                detail=f"Report logo not found at {logo_source}"
+                detail="Required report asset 'residentCouncilLogoSmall.jpg' not found."
             )
-        shutil.copyfile(logo_source, logo_target)
+
+        # Copy logo to report directory if not already present
+        if not logo_target.exists():
+            shutil.copyfile(logo_source, logo_target)
 
         result = subprocess.run(
             [

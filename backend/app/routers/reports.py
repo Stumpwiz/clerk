@@ -248,9 +248,6 @@ async def generate_long_roster(db: Session = Depends(get_db)):
 async def generate_short_roster(db: Session = Depends(get_db)):
     """Generate short form roster (names and offices only)"""
     try:
-        logger.warning("Short roster route entered.")
-        logger.info("Short roster generation started.")
-
         # Query all records, sorted by body and office precedence
         records = db.query(ReportRecord).order_by(
             ReportRecord.body_precedence,
@@ -276,38 +273,21 @@ async def generate_short_roster(db: Session = Depends(get_db)):
             output_name="short_form_roster",
             context=context
         )
-        logger.info("Short roster generation completed: %s", pdf_path)
 
         raw_publish_flag = os.getenv("ENABLE_IONOS_ROSTER_PUBLISH", "")
         publish_enabled = raw_publish_flag.strip().lower() == "true"
         remote_path = "/mrra/documents/roster.pdf"
-        logger.warning(
-            "IONOS short roster publish flag raw value: %r",
-            raw_publish_flag,
-        )
-        logger.warning(
-            "IONOS short roster publish flag parsed result: %s",
-            publish_enabled,
-        )
-        logger.warning(
-            "IONOS short roster publish secret name: %s",
-            settings.ionos_sftp_secret_name,
-        )
 
         if publish_enabled:
-            logger.warning("IONOS short roster publish enabled.")
             try:
-                logger.warning("IONOS short roster publish starting.")
-                logger.warning("IONOS short roster remote path target: %s", remote_path)
-                logger.warning("Calling upload_pdf_to_ionos().")
                 publish_result = upload_pdf_to_ionos(
                     local_pdf_path=pdf_path,
                     secret_name=settings.ionos_sftp_secret_name,
                     aws_region=settings.aws_region,
                     remote_path=remote_path,
                 )
-                logger.warning(
-                    "IONOS short roster publish succeeded: remote_path=%s",
+                logger.info(
+                    "Short roster published to IONOS: %s",
                     publish_result["remote_path"],
                 )
             except IONOSPublisherError as exc:
@@ -319,8 +299,6 @@ async def generate_short_roster(db: Session = Depends(get_db)):
                     "IONOS short roster publish failed: unexpected_error=%s",
                     exc.__class__.__name__,
                 )
-        else:
-            logger.warning("IONOS short roster publish disabled.")
 
         return FileResponse(
             path=str(pdf_path),
