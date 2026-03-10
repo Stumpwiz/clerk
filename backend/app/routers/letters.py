@@ -155,7 +155,7 @@ def build_latex_document(
 \\begin{{document}}
 
 \\begin{{center}}
-    \\includegraphics[width=1.5in]{{../static/images/mrra_logo.png}} \\\\[0.5em]
+    \\includegraphics[width=1.5in]{{../static/images/residentCouncilLogoSmall.jpg}} \\\\[0.5em]
     {{\\Large \\textbf{{Residents Council}}}} \\\\[0.3em]
     {{\\large Mill Race Retirement Association}} \\\\[0.3em]
     1 Nob Hill Drive, Scarborough, ME 04074
