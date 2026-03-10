@@ -1,6 +1,7 @@
 """Utilities for publishing generated roster PDFs to IONOS over SFTP."""
 
 import json
+import logging
 import posixpath
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,8 @@ from typing import Any
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 import paramiko
+
+logger = logging.getLogger(__name__)
 
 
 class IONOSPublisherError(Exception):
@@ -54,6 +57,7 @@ def _load_sftp_config(secret_name: str, aws_region: str | None) -> dict[str, Any
         "password": password,
         "remote_dir": raw_config["remote_dir"].strip(),
         "remote_filename": raw_config["remote_filename"].strip(),
+        "secret_keys": tuple(sorted(raw_config.keys())),
     }
 
 
@@ -79,6 +83,7 @@ def upload_pdf_to_ionos(
     local_pdf_path: str | Path,
     secret_name: str,
     aws_region: str | None = None,
+    remote_path: str | None = None,
 ) -> dict[str, Any]:
     """Upload one PDF file to IONOS using SFTP credentials from Secrets Manager."""
     path = Path(local_pdf_path)
@@ -86,10 +91,20 @@ def upload_pdf_to_ionos(
         raise IONOSPublisherError(f"Local PDF file does not exist: {path}")
 
     config = _load_sftp_config(secret_name=secret_name, aws_region=aws_region)
-    remote_path = posixpath.join(
+    resolved_remote_path = remote_path or posixpath.join(
         config["remote_dir"].strip("/"),
         config["remote_filename"],
     )
+    remote_dir = posixpath.dirname(resolved_remote_path) or "/"
+    logger.warning("IONOS upload start: local_pdf_path=%s", path)
+    logger.warning(
+        "IONOS SFTP target: host=%s username=%s port=%s remote_path=%s",
+        config["host"],
+        config["username"],
+        config["port"],
+        resolved_remote_path,
+    )
+    logger.warning("IONOS SFTP secret keys: %s", config["secret_keys"])
 
     transport = None
     sftp = None
@@ -97,8 +112,18 @@ def upload_pdf_to_ionos(
         transport = paramiko.Transport((config["host"], config["port"]))
         transport.connect(username=config["username"], password=config["password"])
         sftp = paramiko.SFTPClient.from_transport(transport)
-        _ensure_remote_dir(sftp, config["remote_dir"])
-        sftp.put(str(path), remote_path)
+        try:
+            sftp.stat(remote_dir)
+            logger.warning("IONOS remote directory verified: remote_dir=%s", remote_dir)
+        except Exception as exc:
+            logger.warning(
+                "IONOS remote directory check failed: remote_dir=%s error=%s",
+                remote_dir,
+                exc.__class__.__name__,
+            )
+            raise
+        sftp.put(str(path), resolved_remote_path)
+        logger.warning("IONOS upload succeeded: remote_path=%s", resolved_remote_path)
     except paramiko.SSHException as exc:
         raise IONOSPublisherError("Unable to upload short roster PDF to IONOS via SFTP.") from exc
     except OSError as exc:
@@ -109,4 +134,4 @@ def upload_pdf_to_ionos(
         if transport is not None:
             transport.close()
 
-    return {"uploaded": True, "remote_path": remote_path}
+    return {"uploaded": True, "remote_path": resolved_remote_path}
