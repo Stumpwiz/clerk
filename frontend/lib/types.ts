@@ -33,7 +33,6 @@ export interface Term {
 
 export interface LetterTemplate {
   id: number | null;
-  header: string;
   body: string;
 }
 

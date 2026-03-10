@@ -8,7 +8,6 @@ const API_BASE_URL =
 
 interface LetterTemplate {
     id: number | null;
-    header: string;
     body: string;
 }
 
@@ -39,12 +38,17 @@ export default function LettersPage() {
     const [apartment, setApartment] = useState('');
     const [dateError, setDateError] = useState('');
 
-    // Edit modal states
-    const [editHeader, setEditHeader] = useState('');
+    // Edit modal state
     const [editBody, setEditBody] = useState('');
 
     useEffect(() => {
         loadData();
+        // Set letterDate to today's date in YYYY-MM-DD format
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        setLetterDate(`${yyyy}-${mm}-${dd}`);
     }, []);
 
     const loadData = async () => {
@@ -64,7 +68,6 @@ export default function LettersPage() {
             if (response.ok) {
                 const data = await response.json();
                 setTemplate(data);
-                setEditHeader(data.header);
                 setEditBody(data.body);
             }
         } catch (error) {
@@ -143,7 +146,12 @@ export default function LettersPage() {
             if (result.success) {
                 alert('Letter generated successfully! Use the buttons to view or delete the PDF.');
                 await loadPdfs();
-                setLetterDate('');
+                // Reset form but keep today's date
+                const today = new Date();
+                const yyyy = today.getFullYear();
+                const mm = String(today.getMonth() + 1).padStart(2, '0');
+                const dd = String(today.getDate()).padStart(2, '0');
+                setLetterDate(`${yyyy}-${mm}-${dd}`);
                 setRecipient('');
                 setSalutation('');
                 setApartment('');
@@ -167,7 +175,6 @@ export default function LettersPage() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    header: editHeader,
                     body: editBody,
                 }),
             });
@@ -176,7 +183,7 @@ export default function LettersPage() {
                 const data = await response.json();
                 setTemplate(data);
                 setShowEditModal(false);
-                alert('Template updated successfully!');
+                alert('Welcome letter body updated successfully!');
             } else {
                 alert('Failed to update template.');
             }
@@ -382,50 +389,40 @@ export default function LettersPage() {
             </div>
 
             <div className="bg-white shadow rounded-lg">
-                <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                    <h2 className="text-xl font-semibold text-gray-900">Current Template</h2>
-                    <span className="text-sm text-gray-500"
-                          title="Don't edit this LaTeX source code unless you know what you're doing">
-                        ⓘ
-                    </span>
+                <div className="px-6 py-4 border-b border-gray-200">
+                    <h2 className="text-xl font-semibold text-gray-900">Welcome Letter Body</h2>
+                    <p className="text-sm text-gray-500 mt-1">
+                        This text will be used in all generated welcome letters. The letter header and signature are added automatically.
+                    </p>
                 </div>
                 <div className="p-6">
                     {template && template.id ? (
                         <>
                             <div className="mb-4">
-                                <h3 className="text-lg font-medium text-gray-900 mb-2">Header</h3>
-                                <pre
-                                    className="bg-gray-100 border border-gray-400 rounded-md p-4 text-sm overflow-x-auto text-gray-900 font-mono">
-                                    {template.header}
-                                </pre>
-                            </div>
-                            <div className="mb-4">
-                                <h3 className="text-lg font-medium text-gray-900 mb-2">Body</h3>
-                                <pre
-                                    className="bg-gray-100 border border-gray-400 rounded-md p-4 text-sm overflow-x-auto text-gray-900 font-mono">
+                                <div
+                                    className="bg-gray-50 border border-gray-300 rounded-md p-4 text-sm text-gray-900 whitespace-pre-wrap">
                                     {template.body}
-                                </pre>
+                                </div>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => setShowEditModal(true)}
                                 className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                             >
-                                Edit Template
+                                Edit Letter Body
                             </button>
                         </>
                     ) : (
                         <>
                             <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
-                                <p className="text-sm text-yellow-700">No letter template found. Please initialize a
-                                    template.</p>
+                                <p className="text-sm text-yellow-700">No welcome letter body found. Please create one to begin generating letters.</p>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => setShowEditModal(true)}
                                 className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                             >
-                                Create Template
+                                Create Letter Body
                             </button>
                         </>
                     )}
@@ -437,38 +434,30 @@ export default function LettersPage() {
                     <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
                         <div className="px-6 py-4 border-b border-gray-200">
                             <h3 className="text-lg font-medium text-gray-900">
-                                {template && template.id ? 'Edit Letter Template' : 'Create Letter Template'}
+                                {template && template.id ? 'Edit Welcome Letter Body' : 'Create Welcome Letter Body'}
                             </h3>
+                            <p className="text-sm text-gray-500 mt-1">
+                                Enter the plain text body of the welcome letter. Separate paragraphs with blank lines.
+                            </p>
                         </div>
                         <form onSubmit={handleUpdateTemplate}>
-                            <div className="p-6 space-y-4">
-                                <div>
-                                    <label htmlFor="edit_header" className="block text-sm font-medium text-gray-700">
-                                        Header
-                                    </label>
-                                    <textarea
-                                        id="edit_header"
-                                        value={editHeader}
-                                        onChange={(e) => setEditHeader(e.target.value)}
-                                        rows={5}
-                                        required
-                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm font-mono text-gray-900"
-                                    />
-                                    <p className="mt-1 text-xs text-gray-500">Use \\ for LaTeX commands</p>
-                                </div>
+                            <div className="p-6">
                                 <div>
                                     <label htmlFor="edit_body" className="block text-sm font-medium text-gray-700">
-                                        Body
+                                        Letter Body Text
                                     </label>
                                     <textarea
                                         id="edit_body"
                                         value={editBody}
                                         onChange={(e) => setEditBody(e.target.value)}
-                                        rows={10}
+                                        rows={12}
                                         required
-                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm font-mono text-gray-900"
+                                        placeholder="Enter the welcome message here. Use plain text - no special formatting needed."
+                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm text-gray-900"
                                     />
-                                    <p className="mt-1 text-xs text-gray-500">Use \\ for LaTeX commands</p>
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        This text will appear after &quot;Dear [Salutation],&quot; and before the signature.
+                                    </p>
                                 </div>
                             </div>
                             <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
@@ -476,7 +465,6 @@ export default function LettersPage() {
                                     type="button"
                                     onClick={() => {
                                         setShowEditModal(false);
-                                        setEditHeader(template?.header || '');
                                         setEditBody(template?.body || '');
                                     }}
                                     className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -487,7 +475,7 @@ export default function LettersPage() {
                                     type="submit"
                                     className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                                 >
-                                    {template && template.id ? 'Save Changes' : 'Create Template'}
+                                    {template && template.id ? 'Save Changes' : 'Create Letter Body'}
                                 </button>
                             </div>
                         </form>

@@ -3,16 +3,16 @@
 import os
 import re
 import subprocess
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import LetterTemplate
+from app.models import LetterTemplate, ReportRecord
 from app.schemas.letter import (
     LetterTemplateUpdate,
     LetterTemplateResponse,
@@ -33,11 +33,12 @@ STATIC_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 router = APIRouter(prefix="/api/letters", tags=["Letters"])
 
 
-def sanitize_latex(content: str) -> str:
+def escape_latex(text: str) -> str:
     """
-    Sanitize LaTeX content to ensure it's properly formatted and doesn't contain problematic characters.
+    Escape special LaTeX characters in plain text for safe inclusion in LaTeX documents.
     """
     replacements = {
+        '\\': '\\textbackslash{}',
         '&': '\\&',
         '%': '\\%',
         '$': '\\$',
@@ -49,14 +50,147 @@ def sanitize_latex(content: str) -> str:
         '^': '\\textasciicircum{}',
     }
 
+    result = text
     for char, replacement in replacements.items():
-        # Replace the character only if it's not preceded by a backslash
-        content = re.sub(r'(?<!\\)' + re.escape(char), replacement, content)
+        result = result.replace(char, replacement)
 
-    # Ensure proper line endings
-    content = content.replace('\r\n', '\n').replace('\r', '\n')
+    return result
 
-    return content
+
+def convert_plain_text_to_latex(plain_text: str) -> str:
+    """
+    Convert plain text body to LaTeX, preserving paragraphs and escaping special characters.
+    """
+    # Normalize line endings
+    text = plain_text.replace('\r\n', '\n').replace('\r', '\n')
+
+    # Split into paragraphs (separated by blank lines)
+    paragraphs = re.split(r'\n\s*\n', text.strip())
+
+    # Escape each paragraph and join with LaTeX paragraph breaks
+    latex_paragraphs = [escape_latex(p.strip()) for p in paragraphs if p.strip()]
+
+    return '\n\n'.join(latex_paragraphs)
+
+
+def get_current_rc_president(db: Session) -> Optional[tuple[str, str]]:
+    """
+    Query the ReportRecord to find the current Residents Council President.
+    Returns (full_name, apartment) or None if not found.
+    """
+    today = date.today()
+
+    # Query for current RC President
+    query = db.query(ReportRecord).filter(
+        ReportRecord.name == "Residents Council",
+        ReportRecord.title == "President"
+    )
+
+    # Try to find active term (start <= today, end is null or >= today)
+    active = query.filter(
+        ReportRecord.start <= today,
+        (ReportRecord.end.is_(None)) | (ReportRecord.end >= today)
+    ).first()
+
+    if active:
+        full_name = f"{active.first or ''} {active.last or ''}".strip()
+        return (full_name, active.apt or '')
+
+    # Fallback: get the most recent record
+    recent = query.order_by(ReportRecord.start.desc()).first()
+
+    if recent:
+        full_name = f"{recent.first or ''} {recent.last or ''}".strip()
+        return (full_name, recent.apt or '')
+
+    return None
+
+
+def build_latex_document(
+    *,
+    recipient: str,
+    salutation: str,
+    apartment: str,
+    letter_date_str: str,
+    body_text: str,
+    signer_name: str,
+    signer_apt: str
+) -> str:
+    """
+    Build a complete LaTeX document from the provided components.
+    All inputs except body_text should already be LaTeX-safe.
+    """
+    # Escape user inputs
+    recipient_safe = escape_latex(recipient)
+    salutation_safe = escape_latex(salutation)
+    apartment_safe = escape_latex(apartment)
+    body_latex = convert_plain_text_to_latex(body_text)
+    signer_name_safe = escape_latex(signer_name)
+    signer_apt_safe = escape_latex(signer_apt)
+
+    # Build the complete LaTeX document
+    latex_doc = f"""\\documentclass[11pt,letterpaper]{{article}}
+\\usepackage{{geometry}}
+\\usepackage{{graphicx}}
+\\usepackage{{fontspec}}
+\\usepackage{{setspace}}
+
+\\geometry{{
+    letterpaper,
+    left=1in,
+    right=1in,
+    top=1in,
+    bottom=1in
+}}
+
+\\setmainfont{{TeX Gyre Termes}}
+\\pagestyle{{empty}}
+\\setstretch{{1.15}}
+
+\\newcommand{{\\names}}{{{recipient_safe}}}
+\\newcommand{{\\salutation}}{{{salutation_safe}}}
+\\newcommand{{\\apartment}}{{{apartment_safe}}}
+\\date{{{letter_date_str}}}
+
+\\begin{{document}}
+
+\\begin{{center}}
+    \\includegraphics[width=1.5in]{{../../static/images/mrra_logo.png}} \\\\[0.5em]
+    {{\\Large \\textbf{{Residents Council}}}} \\\\[0.3em]
+    {{\\large Mill Race Retirement Association}} \\\\[0.3em]
+    1 Nob Hill Drive, Scarborough, ME 04074
+\\end{{center}}
+
+\\vspace{{1em}}
+
+\\noindent \\today
+
+\\vspace{{1em}}
+
+\\noindent \\names \\\\
+Apartment \\apartment
+
+\\vspace{{1em}}
+
+\\noindent Dear \\salutation,
+
+\\vspace{{0.5em}}
+
+{body_latex}
+
+\\vspace{{1.5em}}
+
+\\noindent Sincerely,
+
+\\vspace{{2em}}
+
+\\noindent {signer_name_safe} \\\\
+President, Residents Council \\\\
+Apartment {signer_apt_safe}
+
+\\end{{document}}"""
+
+    return latex_doc
 
 
 @router.get("/template", response_model=LetterTemplateResponse)
@@ -65,8 +199,8 @@ def get_letter_template(db: Session = Depends(get_db)):
     template = LetterTemplate.get_singleton(db)
     if not template:
         # Return empty template if none exists
-        return LetterTemplateResponse(id=None, header="", body="")
-    return template
+        return LetterTemplateResponse(id=None, body="")
+    return LetterTemplateResponse(id=template.id, body=template.body)
 
 
 @router.put("/template", response_model=LetterTemplateResponse)
@@ -79,16 +213,18 @@ def update_letter_template(
 
     if template:
         # Update existing template
-        template.header = template_data.header
         template.body = template_data.body
+        # Keep header empty or preserve existing value for backward compatibility
+        if not hasattr(template, 'header') or template.header is None:
+            template.header = ""
     else:
         # Create a new template
-        template = LetterTemplate(**template_data.model_dump())
+        template = LetterTemplate(header="", body=template_data.body)
         db.add(template)
 
     db.commit()
     db.refresh(template)
-    return template
+    return LetterTemplateResponse(id=template.id, body=template.body)
 
 
 @router.post("/generate", response_model=LetterGenerateResponse)
@@ -105,6 +241,16 @@ def generate_letter(
             error="No template found. Please create a template first."
         )
 
+    # Get the current RC President
+    president_info = get_current_rc_president(db)
+    if not president_info:
+        return LetterGenerateResponse(
+            success=False,
+            error="Could not find Residents Council President in database."
+        )
+
+    signer_name, signer_apt = president_info
+
     # Extract last name from recipient (last word)
     last_name = letter_data.recipient.split()[-1] if letter_data.recipient else 'Unknown'
 
@@ -112,23 +258,16 @@ def generate_letter(
     formatted_letter_date = letter_data.letter_date.strftime('%B %d, %Y').replace(' 0', ' ')
     effective_date_iso = letter_data.letter_date.strftime('%Y-%m-%d')
 
-    # Sanitize input fields
-    recipient_safe = sanitize_latex(letter_data.recipient)
-    salutation_safe = sanitize_latex(letter_data.salutation)
-    apartment_safe = sanitize_latex(letter_data.apartment)
-
-    # Create LaTeX commands for input fields
-    recipient_command = f"\\newcommand{{\\names}}{{{recipient_safe}}}"
-    salutation_command = f"\\newcommand{{\\salutation}}{{{salutation_safe}}}"
-    apartment_command = f"\\newcommand{{\\apartment}}{{{apartment_safe}}}"
-    date_command = f"\\date{{{formatted_letter_date}}}"
-
-    # Sanitize template header and body
-    header_safe = re.sub(r"(\r\n|\r|\n)+", "\n", template.header.strip())
-    body_safe = re.sub(r"(\r\n|\r|\n)+", "\n", template.body.strip())
-
-    # Combine into complete LaTeX document
-    tex_content = f"{header_safe}\n{recipient_command}\n{salutation_command}\n{apartment_command}\n{date_command}\n{body_safe}"
+    # Build the complete LaTeX document
+    tex_content = build_latex_document(
+        recipient=letter_data.recipient,
+        salutation=letter_data.salutation,
+        apartment=letter_data.apartment,
+        letter_date_str=formatted_letter_date,
+        body_text=template.body,
+        signer_name=signer_name,
+        signer_apt=signer_apt
+    )
 
     # Build filename
     safe_base = f"{effective_date_iso}_{last_name}" if last_name else f"{effective_date_iso}"
