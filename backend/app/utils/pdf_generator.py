@@ -86,7 +86,7 @@ class PDFGenerator:
                 aux_file.unlink()
 
         # Compile with xelatex
-        logo_source = BACKEND_ROOT / "static" / "residentCouncilLogoSmall.jpg"
+        logo_source = BACKEND_ROOT / "static" / "images" / "residentCouncilLogoSmall.jpg"
         logo_target = self.reports_dir / "residentCouncilLogoSmall.jpg"
         if not logo_source.exists():
             raise HTTPException(
