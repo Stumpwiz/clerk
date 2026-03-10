@@ -240,6 +240,7 @@ async def generate_long_roster(db: Session = Depends(get_db)):
         )
 
     except Exception as e:
+        logger.exception("Long roster generation failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -329,6 +330,7 @@ async def generate_short_roster(db: Session = Depends(get_db)):
         )
 
     except Exception as e:
+        logger.exception("Short roster generation failed")
         raise HTTPException(status_code=500, detail=str(e))
 
 
