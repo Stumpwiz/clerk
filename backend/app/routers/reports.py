@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from collections import defaultdict
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import List, Iterable
 
@@ -142,6 +142,14 @@ def _build_vacancies_dataset(db: Session) -> tuple[List[ReportRecord], dict[str,
         processed.append(record)
 
     return processed, dict(grouped)
+
+
+def _format_terms_office(record: ReportRecord) -> str:
+    base = " ".join(part for part in [record.name, record.title] if part)
+    ordinal = (record.ordinal or "").strip()
+    if ordinal:
+        return f"{base}, {ordinal}"
+    return base
 
 
 @router.get("/pdfs", response_model=List[dict])
@@ -417,6 +425,52 @@ async def generate_expirations_report(db: Session = Depends(get_db)):
             headers={"Content-Disposition": "inline; filename=expirations_report.pdf"}
         )
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/terms-report")
+async def generate_terms_report(db: Session = Depends(get_db)):
+    """Generate report of all terms with actual expiration dates"""
+    try:
+        records = db.query(ReportRecord).filter(
+            ReportRecord.end < date(9999, 12, 31),
+            ReportRecord.title != "Liaison",
+            ReportRecord.title != "Staff",
+        ).order_by(
+            ReportRecord.body_precedence,
+            ReportRecord.office_precedence,
+            ReportRecord.first,
+            ReportRecord.last
+        ).all()
+
+        rows = []
+        for record in records:
+            rows.append({
+                "name": f"{record.first or ''} {record.last or ''}".strip(),
+                "office": _format_terms_office(record),
+                "start": record.start.strftime("%Y-%m-%d") if record.start else "",
+                "end": record.end.strftime("%Y-%m-%d") if record.end else "",
+            })
+
+        context = {
+            "generated": pdf_generator.get_generation_timestamp(),
+            "title": "Terms with Expiration Dates",
+            "rows": rows
+        }
+
+        pdf_path = pdf_generator.generate_pdf(
+            template_name="terms_template.tex",
+            output_name="terms_report",
+            context=context
+        )
+
+        return FileResponse(
+            path=str(pdf_path),
+            media_type="application/pdf",
+            filename="terms_report.pdf",
+            headers={"Content-Disposition": "inline; filename=terms_report.pdf"}
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

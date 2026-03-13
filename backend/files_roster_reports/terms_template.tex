@@ -1,0 +1,46 @@
+\documentclass[10pt,twoside]{article}
+\usepackage{lastpage}
+\usepackage{sectsty}
+\usepackage[top=0.65in, bottom=0.75in, left=0.75in, right=0.75in]{geometry}
+\usepackage{titlesec}
+\usepackage{datetime}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{tabularx}
+
+\titleformat{\section}{\normalfont\Large\bfseries}{}{0pt}{}
+
+\pagestyle{fancy}
+\fancyhead{}
+\newcommand{\version}{Generated \VAR{generated}}
+\newcommand{\footerLine}{\small \version}
+\fancyfoot[ROF,LEF]{\thepage}
+\fancyfoot[LOF,REF]{\footerLine}
+\fancyfoot[COF,CEF]{}
+\renewcommand{\headrulewidth}{0.0pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\allsectionsfont{\centering}
+
+\begin{document}
+    \raggedbottom
+    \begin{center}
+        \includegraphics{residentCouncilLogoSmall} \\
+        \vspace{0.5em}
+        {\LARGE \textbf{\VAR{title}}}
+    \end{center}
+
+    \vspace{0.75em}
+
+    \begin{center}
+        \small
+        \renewcommand{\arraystretch}{1.15}
+        \begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{0.24\textwidth} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{0.15\textwidth} >{\raggedright\arraybackslash}p{0.15\textwidth}}
+            \textbf{Name} & \textbf{Office} & \textbf{Start} & \textbf{End} \\
+            \hline
+            \BLOCK{ for row in rows }
+            \VAR{row.name} & \VAR{row.office} & \VAR{row.start} & \VAR{row.end} \\
+            \BLOCK{ endfor }
+        \end{tabularx}
+    \end{center}
+\end{document}

@@ -8,7 +8,10 @@ from typing import Any
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
-import paramiko
+try:
+    import paramiko
+except ImportError:  # pragma: no cover - optional dependency in local/dev environments
+    paramiko = None
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +64,7 @@ def _load_sftp_config(secret_name: str, aws_region: str | None) -> dict[str, Any
     }
 
 
-def _ensure_remote_dir(sftp: paramiko.SFTPClient, remote_dir: str) -> None:
+def _ensure_remote_dir(sftp: Any, remote_dir: str) -> None:
     normalized_dir = remote_dir.strip("/")
     if not normalized_dir:
         return
@@ -86,6 +89,11 @@ def upload_pdf_to_ionos(
     remote_path: str | None = None,
 ) -> dict[str, Any]:
     """Upload one PDF file to IONOS using SFTP credentials from Secrets Manager."""
+    if paramiko is None:
+        raise IONOSPublisherError(
+            "IONOS publish dependency is not installed. Install 'paramiko' to enable SFTP publishing."
+        )
+
     path = Path(local_pdf_path)
     if not path.exists() or not path.is_file():
         raise IONOSPublisherError(f"Local PDF file does not exist: {path}")

@@ -20,7 +20,7 @@ interface ReportButton {
 }
 
 const REPORTS: ReportButton[] = [
-    // Alphabetical order: Expiring Terms, Long Form Roster, Short Form Roster, Vacancies Report
+    // Alphabetical order: Expiring Terms, Long Form Roster, Short Form Roster, Terms Report, Vacancies Report
     {
         id: 'expirations',
         label: 'Expiring Terms',
@@ -41,6 +41,13 @@ const REPORTS: ReportButton[] = [
         endpoint: '/api/reports/short-roster',
         filename: 'short_form_roster.pdf',
         description: 'Condensed roster showing names and offices only'
+    },
+    {
+        id: 'terms-report',
+        label: 'Terms Report',
+        endpoint: '/api/reports/terms-report',
+        filename: 'terms_report.pdf',
+        description: 'All terms with actual expiration dates'
     },
     {
         id: 'vacancies',
