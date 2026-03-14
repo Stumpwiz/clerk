@@ -1,14 +1,14 @@
 # app/routers/reports.py - API endpoints for roster and report generation
 
 import logging
-import os
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from collections import defaultdict
 from datetime import date, datetime
 from pathlib import Path
-from typing import List, Iterable
+from typing import List, Iterable, Dict, Any, Callable, Optional
+from dataclasses import dataclass
 
 from app.database import get_db
 from app.models import ReportRecord, Term, Person, Office, Body
@@ -24,6 +24,17 @@ pdf_generator = PDFGenerator(settings.roster_reports_dir)
 
 
 ALLOWED_REPORT_SUFFIXES = {".pdf", ".txt"}
+
+
+@dataclass
+class ReportRegistryEntry:
+    id: str
+    label: str
+    description: str
+    filename: str
+    renderer_type: str  # "latex_pdf" or "plain_text_file"
+    template: Optional[str] = None
+    builder_func: Optional[Callable[[Session], Any]] = None
 
 
 def _normalize_email(email: str | None) -> str | None:
@@ -152,6 +163,261 @@ def _format_terms_office(record: ReportRecord) -> str:
     return base
 
 
+# --- Data Builder Functions ---
+
+def _build_long_roster_data(db: Session) -> Dict[str, Any]:
+    records = db.query(ReportRecord).order_by(
+        ReportRecord.body_precedence,
+        ReportRecord.office_precedence,
+        ReportRecord.first,
+        ReportRecord.last
+    ).all()
+    grouped = defaultdict(list)
+    for record in records:
+        grouped[record.name].append(record)
+    return {
+        "generated": pdf_generator.get_generation_timestamp(),
+        "title": "Long Form Roster",
+        "grouped": dict(grouped)
+    }
+
+
+def _build_short_roster_data(db: Session) -> Dict[str, Any]:
+    records = db.query(ReportRecord).order_by(
+        ReportRecord.body_precedence,
+        ReportRecord.office_precedence,
+        ReportRecord.first,
+        ReportRecord.last
+    ).all()
+    grouped = defaultdict(list)
+    for record in records:
+        grouped[record.name].append(record)
+    return {
+        "generated": pdf_generator.get_generation_timestamp(),
+        "title": "Short Form Roster",
+        "grouped": dict(grouped)
+    }
+
+
+def _build_vacancies_data(db: Session) -> Dict[str, Any]:
+    _, grouped = _build_vacancies_dataset(db)
+    return {
+        "generated": pdf_generator.get_generation_timestamp(),
+        "title": "Vacancies",
+        "grouped": grouped
+    }
+
+
+def _build_expirations_data(db: Session) -> Dict[str, Any]:
+    current_year = datetime.now().year
+    records = db.query(ReportRecord).filter(
+        ReportRecord.end.between(
+            f"{current_year}-01-01",
+            f"{current_year}-12-31"
+        )
+    ).order_by(
+        ReportRecord.body_precedence,
+        ReportRecord.office_precedence,
+        ReportRecord.first,
+        ReportRecord.last
+    ).all()
+
+    grouped = defaultdict(list)
+    for record in records:
+        record.formatted_end = (
+            record.end.strftime("%Y-%m-%d") if record.end else ""
+        )
+        grouped[record.name].append(record)
+
+    return {
+        "generated": pdf_generator.get_generation_timestamp(),
+        "title": f"Expirations — {current_year}",
+        "grouped": dict(grouped)
+    }
+
+
+def _build_terms_report_data(db: Session) -> Dict[str, Any]:
+    records = db.query(ReportRecord).filter(
+        ReportRecord.end < date(9999, 12, 31),
+        ReportRecord.title != "Liaison",
+        ReportRecord.title != "Staff",
+    ).order_by(
+        ReportRecord.body_precedence,
+        ReportRecord.office_precedence,
+        ReportRecord.first,
+        ReportRecord.last
+    ).all()
+
+    rows = []
+    for record in records:
+        rows.append({
+            "name": f"{record.first or ''} {record.last or ''}".strip(),
+            "office": _format_terms_office(record),
+            "start": record.start.strftime("%Y-%m-%d") if record.start else "",
+            "end": record.end.strftime("%Y-%m-%d") if record.end else "",
+        })
+
+    return {
+        "generated": pdf_generator.get_generation_timestamp(),
+        "title": "Terms with Expiration Dates",
+        "rows": rows
+    }
+
+
+def _build_rc_officers_data(db: Session) -> List[str]:
+    return _query_emails(db, body_name="Residents Council")
+
+
+def _build_rc_officers_and_chairs_data(db: Session) -> List[str]:
+    officers = _query_emails(db, body_name="Residents Council")
+    chairs = _query_emails(
+        db,
+        office_title="Chair",
+        exclude_body_name="Residents Council"
+    )
+    return _dedupe_emails(officers + chairs)
+
+
+def _build_committee_secretaries_data(db: Session) -> List[str]:
+    return _query_emails(
+        db,
+        office_title="Secretary",
+        exclude_body_name="Residents Council"
+    )
+
+
+# --- Registry ---
+
+REPORT_REGISTRY: Dict[str, ReportRegistryEntry] = {
+    "long-roster": ReportRegistryEntry(
+        id="long-roster",
+        label="Long Form Roster",
+        description="Full roster with complete member details",
+        filename="long_form_roster.pdf",
+        renderer_type="latex_pdf",
+        template="lfr_template.tex",
+        builder_func=_build_long_roster_data,
+    ),
+    "short-roster": ReportRegistryEntry(
+        id="short-roster",
+        label="Short Form Roster",
+        description="Condensed roster with names and offices only",
+        filename="short_form_roster.pdf",
+        renderer_type="latex_pdf",
+        template="sfr_template.tex",
+        builder_func=_build_short_roster_data,
+    ),
+    "vacancies": ReportRegistryEntry(
+        id="vacancies",
+        label="Vacancies",
+        description="List of current vacant positions",
+        filename="vacancies_report.pdf",
+        renderer_type="latex_pdf",
+        template="vacancies_template.tex",
+        builder_func=_build_vacancies_data,
+    ),
+    "expirations": ReportRegistryEntry(
+        id="expirations",
+        label="Expirations",
+        description="Terms expiring in the current calendar year",
+        filename="expirations_report.pdf",
+        renderer_type="latex_pdf",
+        template="expirations_template.tex",
+        builder_func=_build_expirations_data,
+    ),
+    "terms-report": ReportRegistryEntry(
+        id="terms-report",
+        label="Terms Report",
+        description="All terms with valid expiration dates",
+        filename="terms_report.pdf",
+        renderer_type="latex_pdf",
+        template="terms_template.tex",
+        builder_func=_build_terms_report_data,
+    ),
+    "rc-officers": ReportRegistryEntry(
+        id="rc-officers",
+        label="Residents Council Officers",
+        description="Email list for Residents Council officers",
+        filename="rc_officers.txt",
+        renderer_type="plain_text_file",
+        builder_func=_build_rc_officers_data,
+    ),
+    "rc-officers-and-chairs": ReportRegistryEntry(
+        id="rc-officers-and-chairs",
+        label="RC Officers and Chairs",
+        description="Combined email list for RC officers and committee chairs",
+        filename="rc_officers_and_chairs.txt",
+        renderer_type="plain_text_file",
+        builder_func=_build_rc_officers_and_chairs_data,
+    ),
+    "committee-secretaries": ReportRegistryEntry(
+        id="committee-secretaries",
+        label="Committee Secretaries",
+        description="Email list for all committee secretaries",
+        filename="committee_secretaries.txt",
+        renderer_type="plain_text_file",
+        builder_func=_build_committee_secretaries_data,
+    ),
+}
+
+
+# --- Rendering Helpers ---
+
+def _render_pdf_report(report: ReportRegistryEntry, context: Dict[str, Any]) -> FileResponse:
+    output_name = report.filename.replace(".pdf", "")
+    pdf_path = pdf_generator.generate_pdf(
+        template_name=report.template,
+        output_name=output_name,
+        context=context
+    )
+
+    # Special handling for short-roster IONOS publish
+    if report.id == "short-roster":
+        _publish_short_roster_to_ionos(pdf_path)
+
+    return FileResponse(
+        path=str(pdf_path),
+        media_type="application/pdf",
+        filename=report.filename,
+        headers={"Content-Disposition": f"inline; filename={report.filename}"}
+    )
+
+
+def _publish_short_roster_to_ionos(pdf_path: Path):
+    publish_enabled = settings.enable_ionos_roster_publish
+    remote_path = "/mrra/documents/roster.pdf"
+
+    if publish_enabled:
+        try:
+            publish_result = upload_pdf_to_ionos(
+                local_pdf_path=pdf_path,
+                secret_name=settings.ionos_sftp_secret_name,
+                aws_region=settings.aws_region,
+                remote_path=remote_path,
+            )
+            logger.info(
+                "Short roster published to IONOS: %s",
+                publish_result["remote_path"],
+            )
+        except IONOSPublisherError as exc:
+            logger.exception("IONOS short roster publish failed: %s", exc)
+        except Exception as exc:
+            logger.exception(
+                "IONOS short roster publish failed: unexpected_error=%s",
+                exc.__class__.__name__,
+            )
+
+
+def _render_text_report(report: ReportRegistryEntry, emails: List[str]) -> FileResponse:
+    report_path = _write_text_report(report.filename, emails)
+    return FileResponse(
+        path=str(report_path),
+        media_type="text/plain; charset=utf-8",
+        filename=report.filename,
+        headers={"Content-Disposition": f"inline; filename={report.filename}"}
+    )
+
+
 @router.get("/pdfs", response_model=List[dict])
 async def list_report_pdfs():
     """List all available report files"""
@@ -214,39 +480,9 @@ async def serve_report_file(filename: str):
 async def generate_long_roster(db: Session = Depends(get_db)):
     """Generate long form roster with full details"""
     try:
-        # Query all records, sorted by body and office precedence
-        records = db.query(ReportRecord).order_by(
-            ReportRecord.body_precedence,
-            ReportRecord.office_precedence,
-            ReportRecord.first,
-            ReportRecord.last
-        ).all()
-
-        # Group by body name
-        grouped = defaultdict(list)
-        for record in records:
-            grouped[record.name].append(record)
-
-        # Generate PDF
-        context = {
-            "generated": pdf_generator.get_generation_timestamp(),
-            "title": "Long Form Roster",
-            "grouped": dict(grouped)
-        }
-
-        pdf_path = pdf_generator.generate_pdf(
-            template_name="lfr_template.tex",
-            output_name="long_form_roster",
-            context=context
-        )
-
-        return FileResponse(
-            path=str(pdf_path),
-            media_type="application/pdf",
-            filename="long_form_roster.pdf",
-            headers={"Content-Disposition": "inline; filename=long_form_roster.pdf"}
-        )
-
+        report = REPORT_REGISTRY["long-roster"]
+        context = report.builder_func(db)
+        return _render_pdf_report(report, context)
     except Exception as e:
         logger.exception("Long roster generation failed")
         raise HTTPException(status_code=500, detail=str(e))
@@ -256,65 +492,9 @@ async def generate_long_roster(db: Session = Depends(get_db)):
 async def generate_short_roster(db: Session = Depends(get_db)):
     """Generate short form roster (names and offices only)"""
     try:
-        # Query all records, sorted by body and office precedence
-        records = db.query(ReportRecord).order_by(
-            ReportRecord.body_precedence,
-            ReportRecord.office_precedence,
-            ReportRecord.first,
-            ReportRecord.last
-        ).all()
-
-        # Group by body name
-        grouped = defaultdict(list)
-        for record in records:
-            grouped[record.name].append(record)
-
-        # Generate PDF
-        context = {
-            "generated": pdf_generator.get_generation_timestamp(),
-            "title": "Short Form Roster",
-            "grouped": dict(grouped)
-        }
-
-        pdf_path = pdf_generator.generate_pdf(
-            template_name="sfr_template.tex",
-            output_name="short_form_roster",
-            context=context
-        )
-
-        raw_publish_flag = os.getenv("ENABLE_IONOS_ROSTER_PUBLISH", "")
-        publish_enabled = raw_publish_flag.strip().lower() == "true"
-        remote_path = "/mrra/documents/roster.pdf"
-
-        if publish_enabled:
-            try:
-                publish_result = upload_pdf_to_ionos(
-                    local_pdf_path=pdf_path,
-                    secret_name=settings.ionos_sftp_secret_name,
-                    aws_region=settings.aws_region,
-                    remote_path=remote_path,
-                )
-                logger.info(
-                    "Short roster published to IONOS: %s",
-                    publish_result["remote_path"],
-                )
-            except IONOSPublisherError as exc:
-                # Keep existing FileResponse API contract for this route;
-                # publish status can be surfaced in JSON in a future route revision.
-                logger.exception("IONOS short roster publish failed: %s", exc)
-            except Exception as exc:
-                logger.exception(
-                    "IONOS short roster publish failed: unexpected_error=%s",
-                    exc.__class__.__name__,
-                )
-
-        return FileResponse(
-            path=str(pdf_path),
-            media_type="application/pdf",
-            filename="short_form_roster.pdf",
-            headers={"Content-Disposition": "inline; filename=short_form_roster.pdf"}
-        )
-
+        report = REPORT_REGISTRY["short-roster"]
+        context = report.builder_func(db)
+        return _render_pdf_report(report, context)
     except Exception as e:
         logger.exception("Short roster generation failed")
         raise HTTPException(status_code=500, detail=str(e))
@@ -324,28 +504,9 @@ async def generate_short_roster(db: Session = Depends(get_db)):
 async def generate_vacancies_report(db: Session = Depends(get_db)):
     """Generate report of vacant positions"""
     try:
-        _, grouped = _build_vacancies_dataset(db)
-
-        # Generate PDF
-        context = {
-            "generated": pdf_generator.get_generation_timestamp(),
-            "title": "Vacancies",
-            "grouped": grouped
-        }
-
-        pdf_path = pdf_generator.generate_pdf(
-            template_name="vacancies_template.tex",
-            output_name="vacancies_report",
-            context=context
-        )
-
-        return FileResponse(
-            path=str(pdf_path),
-            media_type="application/pdf",
-            filename="vacancies_report.pdf",
-            headers={"Content-Disposition": "inline; filename=vacancies_report.pdf"}
-        )
-
+        report = REPORT_REGISTRY["vacancies"]
+        context = report.builder_func(db)
+        return _render_pdf_report(report, context)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -380,51 +541,9 @@ async def get_vacancies_data(db: Session = Depends(get_db)):
 async def generate_expirations_report(db: Session = Depends(get_db)):
     """Generate report of terms expiring this year"""
     try:
-        # Get current year
-        current_year = datetime.now().year
-
-        # Query records with terms ending this year
-        records = db.query(ReportRecord).filter(
-            ReportRecord.end.between(
-                f"{current_year}-01-01",
-                f"{current_year}-12-31"
-            )
-        ).order_by(
-            ReportRecord.body_precedence,
-            ReportRecord.office_precedence,
-            ReportRecord.first,
-            ReportRecord.last
-        ).all()
-
-        # Group by body and format dates
-        grouped = defaultdict(list)
-        for record in records:
-            # Format end date for display
-            record.formatted_end = (
-                record.end.strftime("%Y-%m-%d") if record.end else ""
-            )
-            grouped[record.name].append(record)
-
-        # Generate PDF
-        context = {
-            "generated": pdf_generator.get_generation_timestamp(),
-            "title": f"Expirations — {current_year}",
-            "grouped": dict(grouped)
-        }
-
-        pdf_path = pdf_generator.generate_pdf(
-            template_name="expirations_template.tex",
-            output_name="expirations_report",
-            context=context
-        )
-
-        return FileResponse(
-            path=str(pdf_path),
-            media_type="application/pdf",
-            filename="expirations_report.pdf",
-            headers={"Content-Disposition": "inline; filename=expirations_report.pdf"}
-        )
-
+        report = REPORT_REGISTRY["expirations"]
+        context = report.builder_func(db)
+        return _render_pdf_report(report, context)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -433,44 +552,9 @@ async def generate_expirations_report(db: Session = Depends(get_db)):
 async def generate_terms_report(db: Session = Depends(get_db)):
     """Generate report of all terms with actual expiration dates"""
     try:
-        records = db.query(ReportRecord).filter(
-            ReportRecord.end < date(9999, 12, 31),
-            ReportRecord.title != "Liaison",
-            ReportRecord.title != "Staff",
-        ).order_by(
-            ReportRecord.body_precedence,
-            ReportRecord.office_precedence,
-            ReportRecord.first,
-            ReportRecord.last
-        ).all()
-
-        rows = []
-        for record in records:
-            rows.append({
-                "name": f"{record.first or ''} {record.last or ''}".strip(),
-                "office": _format_terms_office(record),
-                "start": record.start.strftime("%Y-%m-%d") if record.start else "",
-                "end": record.end.strftime("%Y-%m-%d") if record.end else "",
-            })
-
-        context = {
-            "generated": pdf_generator.get_generation_timestamp(),
-            "title": "Terms with Expiration Dates",
-            "rows": rows
-        }
-
-        pdf_path = pdf_generator.generate_pdf(
-            template_name="terms_template.tex",
-            output_name="terms_report",
-            context=context
-        )
-
-        return FileResponse(
-            path=str(pdf_path),
-            media_type="application/pdf",
-            filename="terms_report.pdf",
-            headers={"Content-Disposition": "inline; filename=terms_report.pdf"}
-        )
+        report = REPORT_REGISTRY["terms-report"]
+        context = report.builder_func(db)
+        return _render_pdf_report(report, context)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -479,14 +563,9 @@ async def generate_terms_report(db: Session = Depends(get_db)):
 async def generate_rc_officers_email_list(db: Session = Depends(get_db)):
     """Generate Residents Council officers email list"""
     try:
-        emails = _query_emails(db, body_name="Residents Council")
-        report_path = _write_text_report("rc_officers.txt", emails)
-        return FileResponse(
-            path=str(report_path),
-            media_type="text/plain; charset=utf-8",
-            filename="rc_officers.txt",
-            headers={"Content-Disposition": "inline; filename=rc_officers.txt"}
-        )
+        report = REPORT_REGISTRY["rc-officers"]
+        emails = report.builder_func(db)
+        return _render_text_report(report, emails)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -495,20 +574,9 @@ async def generate_rc_officers_email_list(db: Session = Depends(get_db)):
 async def generate_rc_officers_and_chairs_email_list(db: Session = Depends(get_db)):
     """Generate combined RC officers + committee chairs email list"""
     try:
-        officers = _query_emails(db, body_name="Residents Council")
-        chairs = _query_emails(
-            db,
-            office_title="Chair",
-            exclude_body_name="Residents Council"
-        )
-        combined = _dedupe_emails(officers + chairs)
-        report_path = _write_text_report("rc_officers_and_chairs.txt", combined)
-        return FileResponse(
-            path=str(report_path),
-            media_type="text/plain; charset=utf-8",
-            filename="rc_officers_and_chairs.txt",
-            headers={"Content-Disposition": "inline; filename=rc_officers_and_chairs.txt"}
-        )
+        report = REPORT_REGISTRY["rc-officers-and-chairs"]
+        combined = report.builder_func(db)
+        return _render_text_report(report, combined)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -526,13 +594,8 @@ def _get_committee_secretaries_emails(db: Session) -> List[str]:
 async def generate_committee_secretaries_email_list(db: Session = Depends(get_db)):
     """Generate committee secretaries email list"""
     try:
-        emails = _get_committee_secretaries_emails(db)
-        report_path = _write_text_report("committee_secretaries.txt", emails)
-        return FileResponse(
-            path=str(report_path),
-            media_type="text/plain; charset=utf-8",
-            filename="committee_secretaries.txt",
-            headers={"Content-Disposition": "inline; filename=committee_secretaries.txt"}
-        )
+        report = REPORT_REGISTRY["committee-secretaries"]
+        emails = report.builder_func(db)
+        return _render_text_report(report, emails)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
