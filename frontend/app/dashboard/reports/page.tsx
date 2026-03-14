@@ -19,76 +19,51 @@ interface ReportButton {
     description: string;
 }
 
-const REPORTS: ReportButton[] = [
-    // Alphabetical order: Expiring Terms, Long Form Roster, Short Form Roster, Terms Report, Vacancies Report
-    {
-        id: 'expirations',
-        label: 'Expiring Terms',
-        endpoint: '/api/reports/expirations',
-        filename: 'expirations_report.pdf',
-        description: 'Terms expiring this year'
-    },
-    {
-        id: 'long-roster',
-        label: 'Long Form Roster',
-        endpoint: '/api/reports/long-roster',
-        filename: 'long_form_roster.pdf',
-        description: 'Complete roster with all details including contact information'
-    },
-    {
-        id: 'short-roster',
-        label: 'Short Form Roster',
-        endpoint: '/api/reports/short-roster',
-        filename: 'short_form_roster.pdf',
-        description: 'Condensed roster showing names and offices only'
-    },
-    {
-        id: 'terms-report',
-        label: 'Terms Report',
-        endpoint: '/api/reports/terms-report',
-        filename: 'terms_report.pdf',
-        description: 'All terms with actual expiration dates'
-    },
-    {
-        id: 'vacancies',
-        label: 'Vacancies Report',
-        endpoint: '/api/reports/vacancies',
-        filename: 'vacancies_report.pdf',
-        description: 'List of all currently vacant positions'
-    },
-    {
-        id: 'rc-officers',
-        label: 'RC Officers Email List',
-        endpoint: '/api/reports/rc-officers',
-        filename: 'rc_officers.txt',
-        description: 'Residents Council officers email list'
-    },
-    {
-        id: 'rc-officers-and-chairs',
-        label: 'RC Officers + Committee Chairs Email List',
-        endpoint: '/api/reports/rc-officers-and-chairs',
-        filename: 'rc_officers_and_chairs.txt',
-        description: 'Residents Council officers combined with committee chairs'
-    },
-    {
-        id: 'committee-secretaries',
-        label: 'Committee Secretaries Email List',
-        endpoint: '/api/reports/committee-secretaries',
-        filename: 'committee_secretaries.txt',
-        description: 'Committee secretaries email list'
-    }
-];
-
 export default function ReportsPage() {
+    const [reportsRegistry, setReportsRegistry] = useState<ReportButton[]>([]);
     const [pdfFiles, setPdfFiles] = useState<PDFFile[]>([]);
     const [selectedPdf, setSelectedPdf] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const [loadingRegistry, setLoadingRegistry] = useState(true);
     const [generatingReports, setGeneratingReports] = useState<Set<string>>(new Set());
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
+        loadReportsRegistry();
         loadPdfFiles();
     }, []);
+
+    const loadReportsRegistry = async () => {
+        try {
+            setLoadingRegistry(true);
+            const response = await fetch(`${API_BASE_URL}/api/reports`);
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch reports registry');
+            }
+
+            const data = await response.json();
+
+            // Map backend metadata to ReportButton format
+            const mappedReports: ReportButton[] = data.map((item: any) => ({
+                id: item.id,
+                label: item.label,
+                endpoint: `/api/reports/${item.id}`,
+                filename: item.filename,
+                description: item.description
+            }));
+
+            // Preserve current UI alphabetical sorting by label
+            mappedReports.sort((a, b) => a.label.localeCompare(b.label));
+
+            setReportsRegistry(mappedReports);
+        } catch (error) {
+            console.error('Error loading reports registry:', error);
+            setError('Failed to load reports registry from backend');
+        } finally {
+            setLoadingRegistry(false);
+        }
+    };
 
     const loadPdfFiles = async () => {
         try {
@@ -162,7 +137,7 @@ export default function ReportsPage() {
         }
     };
 
-    if (loading) {
+    if (loading || loadingRegistry) {
         return (
             <div className="flex items-center justify-center h-64">
                 <Loader2 className="h-8 w-8 animate-spin text-blue-600"/>
@@ -206,7 +181,7 @@ export default function ReportsPage() {
                     </div>
                     <div className="p-6">
                         <div className="space-y-4">
-                            {REPORTS.map((report) => {
+                            {reportsRegistry.map((report) => {
                                 const isGenerating = generatingReports.has(report.id);
 
                                 return (

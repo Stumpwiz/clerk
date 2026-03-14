@@ -3,6 +3,7 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from collections import defaultdict
 from datetime import date, datetime
@@ -35,6 +36,14 @@ class ReportRegistryEntry:
     renderer_type: str  # "latex_pdf" or "plain_text_file"
     template: Optional[str] = None
     builder_func: Optional[Callable[[Session], Any]] = None
+
+
+class ReportMetadata(BaseModel):
+    id: str
+    label: str
+    description: str
+    filename: str
+    renderer_type: str
 
 
 def _normalize_email(email: str | None) -> str | None:
@@ -416,6 +425,21 @@ def _render_text_report(report: ReportRegistryEntry, emails: List[str]) -> FileR
         filename=report.filename,
         headers={"Content-Disposition": f"inline; filename={report.filename}"}
     )
+
+
+@router.get("", response_model=List[ReportMetadata])
+async def list_reports():
+    """List all available reports with their metadata"""
+    return [
+        ReportMetadata(
+            id=entry.id,
+            label=entry.label,
+            description=entry.description,
+            filename=entry.filename,
+            renderer_type=entry.renderer_type
+        )
+        for entry in REPORT_REGISTRY.values()
+    ]
 
 
 @router.get("/pdfs", response_model=List[dict])
