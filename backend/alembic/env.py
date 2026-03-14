@@ -36,21 +36,21 @@ if config.config_file_name is not None:
         logging.basicConfig(level=logging.INFO)
 
 
+# Ensure the backend directory is on sys.path so `import app.*` works when running alembic
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
+
 def get_database_url() -> str:
     """Resolve DATABASE_URL with fallback to ini value.
-
-    Prefer app.config.get_database_url() which can assemble the URL from
-    POSTGRES_* parts (including POSTGRES_PASSWORD) when DATABASE_URL is not
-    explicitly set. This helps local setups where credentials are provided as
-    separate env vars.
+    Uses app.config.settings.database_url to ensure the URL is
+    properly resolved from the environment (including .env file).
     """
     try:
-        # Reuse application logic for building the URL from env variables
-        from app.config import get_database_url as app_get_db_url  # type: ignore
-
-        url = app_get_db_url()
-        if url:
-            return url
+        from app.config import settings
+        if settings.database_url:
+            return settings.database_url
     except Exception:
         pass
 
@@ -63,11 +63,6 @@ def get_database_url() -> str:
 
 # Set the sqlalchemy.url in config dynamically from environment
 config.set_main_option("sqlalchemy.url", get_database_url())
-
-# Ensure the backend directory is on sys.path so `import app.*` works when running alembic
-BACKEND_DIR = Path(__file__).resolve().parents[1]
-if str(BACKEND_DIR) not in sys.path:
-    sys.path.insert(0, str(BACKEND_DIR))
 
 # Import application's Base metadata and register all models for autogenerate support
 from app.database import Base  # noqa: E402

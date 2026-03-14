@@ -124,9 +124,9 @@ cd clerk-community-admin
 
 ```bash
 # Copy the example file
-cp oldEnv.docker.example oldEnv
+cp backend/.env.example backend/.env
 
-# Edit oldEnv and add your Clerk credentials:
+# Edit backend/.env and add your Clerk credentials:
 # CLERK_SECRET_KEY=sk_test_...
 # CLERK_PUBLISHABLE_KEY=pk_test_...
 ```
@@ -199,9 +199,9 @@ cd frontend
 # Install dependencies
 npm install
 
-# Create oldEnv.local.backup with your Clerk keys
-cp oldEnv.local.backup.example oldEnv.local.backup
-# Edit oldEnv.local.backup and add your credentials
+# Create .env.local with your Clerk keys
+cp .env.local.example .env.local
+# Edit .env.local and add your credentials
 
 # Start the frontend
 npm run dev
@@ -229,6 +229,22 @@ npm run dev
 - **[Backup & Restore Guide](docs/backup-and-restore-guide.md)** - Backup and recovery procedures
 - **[Backend README](backend/README.md)** - Backend setup and API documentation
 
+## Local Development Guardrails
+
+To reduce the chance of committing secrets, this repository includes secret-scanning guardrails that run both locally and in GitHub Actions.
+
+### Local Pre-commit Hook
+1. **Install gitleaks**: Ensure you have [gitleaks](https://github.com/gitleaks/gitleaks) installed locally.
+2. **Configure hooks path**: Run the following command in the project root to enable repo-local hooks:
+   ```bash
+   git config core.hooksPath .githooks
+   ```
+
+Once enabled, `gitleaks` will automatically scan staged changes for secrets before every commit using a custom `.gitleaks.toml` configuration and abort if any are detected.
+
+### GitHub Actions CI
+All push and pull request events to `master` are automatically scanned for secrets using the same `.gitleaks.toml` rules.
+
 ## Project Structure
 
 ```
@@ -249,7 +265,7 @@ clerk-community-admin/
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions can't be accommicated at this time.
 
 ## License
 

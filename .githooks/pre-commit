@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Clerk Secret-Scanning Guardrail
+# This hook scans staged changes for secrets using gitleaks.
+
+if ! command -v gitleaks &> /dev/null
+then
+    echo "Error: gitleaks is not installed. Please install it to use this pre-commit hook."
+    echo "Visit https://github.com/gitleaks/gitleaks for installation instructions."
+    exit 1
+fi
+
+echo "Running gitleaks secret-scanning on staged changes..."
+
+# Scan staged changes with custom config
+gitleaks protect --staged --verbose --config .gitleaks.toml
+
+if [ $? -eq 0 ]; then
+    echo "✅ No secrets detected by gitleaks."
+    exit 0
+else
+    echo "❌ Secrets detected! Commit aborted."
+    echo "Please remove the secrets from your staged changes and try again."
+    exit 1
+fi

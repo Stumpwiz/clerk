@@ -1,0 +1,35 @@
+title = "Clerk Gitleaks Config"
+
+[[rules]]
+id = "database-url-assignment"
+description = "DATABASE_URL assignment"
+regex = '''(?m)^\s*DATABASE_URL\s*=\s*.+$'''
+keywords = ["DATABASE_URL"]
+
+[[rules]]
+id = "clerk-secret-key-assignment"
+description = "CLERK_SECRET_KEY assignment"
+regex = '''(?m)^\s*CLERK_SECRET_KEY\s*=\s*.+$'''
+keywords = ["CLERK_SECRET_KEY"]
+
+[[rules]]
+id = "aws-access-key-id-assignment"
+description = "AWS_ACCESS_KEY_ID assignment"
+regex = '''(?m)^\s*AWS_ACCESS_KEY_ID\s*=\s*.+$'''
+keywords = ["AWS_ACCESS_KEY_ID"]
+
+[[rules]]
+id = "aws-secret-access-key-assignment"
+description = "AWS_SECRET_ACCESS_KEY assignment"
+regex = '''(?m)^\s*AWS_SECRET_ACCESS_KEY\s*=\s*.+$'''
+keywords = ["AWS_SECRET_ACCESS_KEY"]
+
+[[rules]]
+id = "generic-private-key"
+description = "Generic private key material"
+regex = '''-----BEGIN ([A-Z ]+)?PRIVATE KEY-----'''
+keywords = ["PRIVATE KEY"]
+
+[[allowlists]]
+description = "Allow example env template"
+paths = ['''(^|/)\.env\.example$''']
