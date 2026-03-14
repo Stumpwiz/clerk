@@ -19,6 +19,14 @@ interface ReportButton {
     description: string;
 }
 
+interface ReportMetadata {
+    id: string;
+    label: string;
+    description: string;
+    filename: string;
+    renderer_type: string;
+}
+
 export default function ReportsPage() {
     const [reportsRegistry, setReportsRegistry] = useState<ReportButton[]>([]);
     const [pdfFiles, setPdfFiles] = useState<PDFFile[]>([]);
@@ -42,10 +50,10 @@ export default function ReportsPage() {
                 throw new Error('Failed to fetch reports registry');
             }
 
-            const data = await response.json();
+            const data: ReportMetadata[] = await response.json();
 
             // Map backend metadata to ReportButton format
-            const mappedReports: ReportButton[] = data.map((item: any) => ({
+            const mappedReports: ReportButton[] = data.map((item) => ({
                 id: item.id,
                 label: item.label,
                 endpoint: `/api/reports/${item.id}`,
