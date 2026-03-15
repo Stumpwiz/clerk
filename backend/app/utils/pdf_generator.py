@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, Any
 from fastapi import HTTPException
 from jinja2 import Environment, FileSystemLoader
+from .formatters import format_phone
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,7 @@ class PDFGenerator:
             comment_end_string='}',
             autoescape=False
         )
+        self.jinja_env.filters['phone'] = format_phone
 
     def generate_pdf(
             self,
