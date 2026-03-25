@@ -25,6 +25,8 @@ class LetterGenerateRequest(BaseModel):
     recipient: str = Field(..., description="Recipient name(s), e.g., 'John and Mary Smith'")
     salutation: str = Field(..., description="Salutation without 'Dear', e.g., 'John and Mary'")
     apartment: str = Field(..., description="Apartment number")
+    street: Optional[str] = Field(None, description="Street address (optional)")
+    city_state_zip: Optional[str] = Field(None, description="City, State, ZIP (optional)")
 
 
 class LetterGenerateResponse(BaseModel):

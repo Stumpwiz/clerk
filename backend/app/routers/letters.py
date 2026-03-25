@@ -111,6 +111,8 @@ def build_latex_document(
     recipient: str,
     salutation: str,
     apartment: str,
+    street: Optional[str],
+    city_state_zip: Optional[str],
     letter_date_str: str,
     body_text: str,
     signer_name: str,
@@ -124,50 +126,57 @@ def build_latex_document(
     recipient_safe = escape_latex(recipient)
     salutation_safe = escape_latex(salutation)
     apartment_safe = escape_latex(apartment)
+    street_safe = escape_latex(street) if street else None
+    city_state_zip_safe = escape_latex(city_state_zip) if city_state_zip else None
     body_latex = convert_plain_text_to_latex(body_text)
     signer_name_safe = escape_latex(signer_name)
     signer_apt_safe = escape_latex(signer_apt)
+
+    # Build inside address block
+    address_lines = [f"{recipient_safe}"]
+    if apartment_safe:
+        address_lines.append(f"Apartment {apartment_safe}")
+    if street_safe:
+        address_lines.append(street_safe)
+    if city_state_zip_safe:
+        address_lines.append(city_state_zip_safe)
+    inside_address = " \\\\\n".join(address_lines)
 
     # Build the complete LaTeX document
     latex_doc = f"""\\documentclass[11pt,letterpaper]{{article}}
 \\usepackage{{geometry}}
 \\usepackage{{graphicx}}
-\\usepackage{{fontspec}}
 \\usepackage{{setspace}}
 
 \\geometry{{
     letterpaper,
     left=1in,
     right=1in,
-    top=1in,
+    top=1.5in,
     bottom=1in
 }}
 
-\\setmainfont{{TeX Gyre Termes}}
 \\pagestyle{{empty}}
-\\setstretch{{1.15}}
+\\setstretch{{1.0}}
 
-\\newcommand{{\\names}}{{{recipient_safe}}}
 \\newcommand{{\\salutation}}{{{salutation_safe}}}
-\\newcommand{{\\apartment}}{{{apartment_safe}}}
 \\date{{{letter_date_str}}}
 
 \\begin{{document}}
 
 \\begin{{center}}
-    \\includegraphics[width=1.5in]{{../static/images/residentCouncilLogoSmall.jpg}} \\\\[0.5em]
+    \\includegraphics[width=2.0in]{{../static/images/residentCouncilLogoSmall.jpg}} \\\\[0.5em]
 \\end{{center}}
 
 \\vspace{{1em}}
 
-\\noindent \\today
+\\noindent {letter_date_str}
 
 \\vspace{{1em}}
 
-\\noindent \\names \\\\
-Apartment \\apartment
+\\noindent {inside_address}
 
-\\vspace{{1em}}
+\\vspace{{1.5em}}
 
 \\noindent Dear \\salutation,
 
@@ -255,11 +264,17 @@ def generate_letter(
     formatted_letter_date = letter_data.letter_date.strftime('%B %d, %Y').replace(' 0', ' ')
     effective_date_iso = letter_data.letter_date.strftime('%Y-%m-%d')
 
+    # Defaults for street and city/state/ZIP
+    street = letter_data.street.strip() if letter_data.street and letter_data.street.strip() else "2525 Pot Spring Road"
+    city_state_zip = letter_data.city_state_zip.strip() if letter_data.city_state_zip and letter_data.city_state_zip.strip() else "Timonium MD 21093"
+
     # Build the complete LaTeX document
     tex_content = build_latex_document(
         recipient=letter_data.recipient,
         salutation=letter_data.salutation,
         apartment=letter_data.apartment,
+        street=street,
+        city_state_zip=city_state_zip,
         letter_date_str=formatted_letter_date,
         body_text=template.body,
         signer_name=signer_name,

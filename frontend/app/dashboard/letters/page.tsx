@@ -4,7 +4,7 @@ import {useState, useEffect} from 'react';
 import {Loader2} from 'lucide-react';
 
 const API_BASE_URL =
-    process.env.NEXT_PUBLIC_API_BASE_URL ?? 'https://api.mrrc.online';
+    process.env.NEXT_PUBLIC_API_URL ?? '';
 
 interface LetterTemplate {
     id: number | null;
@@ -20,6 +20,8 @@ interface GenerateLetterRequest {
     recipient: string;
     salutation: string;
     apartment: string;
+    street: string;
+    city_state_zip: string;
     letter_date: string;
 }
 
@@ -36,6 +38,8 @@ export default function LettersPage() {
     const [recipient, setRecipient] = useState('');
     const [salutation, setSalutation] = useState('');
     const [apartment, setApartment] = useState('');
+    const [street, setStreet] = useState('');
+    const [cityStateZip, setCityStateZip] = useState('');
     const [dateError, setDateError] = useState('');
 
     // Edit modal state
@@ -130,6 +134,8 @@ export default function LettersPage() {
                 recipient,
                 salutation,
                 apartment,
+                street,
+                city_state_zip: cityStateZip,
                 letter_date: letterDate,
             };
 
@@ -155,6 +161,8 @@ export default function LettersPage() {
                 setRecipient('');
                 setSalutation('');
                 setApartment('');
+                setStreet('');
+                setCityStateZip('');
             } else {
                 alert(`Failed to generate PDF: ${result.error || 'Unknown error'}`);
             }
@@ -310,6 +318,34 @@ export default function LettersPage() {
                                     value={apartment}
                                     onChange={(e) => setApartment(e.target.value)}
                                     required
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm text-gray-900 placeholder-gray-400"
+                                />
+                            </div>
+
+                            <div>
+                                <label htmlFor="street" className="block text-sm font-medium text-gray-700">
+                                    Street Address (Optional)
+                                </label>
+                                <input
+                                    type="text"
+                                    id="street"
+                                    value={street}
+                                    placeholder="2525 Pot Spring Road"
+                                    onChange={(e) => setStreet(e.target.value)}
+                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm text-gray-900 placeholder-gray-400"
+                                />
+                            </div>
+
+                            <div>
+                                <label htmlFor="city_state_zip" className="block text-sm font-medium text-gray-700">
+                                    City, State, ZIP (Optional)
+                                </label>
+                                <input
+                                    type="text"
+                                    id="city_state_zip"
+                                    value={cityStateZip}
+                                    placeholder="Timonium MD 21093"
+                                    onChange={(e) => setCityStateZip(e.target.value)}
                                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm text-gray-900 placeholder-gray-400"
                                 />
                             </div>

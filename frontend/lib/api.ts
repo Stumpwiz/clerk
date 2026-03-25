@@ -3,7 +3,7 @@
 import type {Body, Office, Person, Term, LetterTemplate, ApiError} from './types';
 
 const API_BASE_URL =
-    process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://api.mrrc.online";
+    process.env.NEXT_PUBLIC_API_URL ?? "";
 
 class ApiClient {
     private baseUrl: string;

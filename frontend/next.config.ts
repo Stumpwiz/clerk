@@ -1,8 +1,9 @@
 import type {NextConfig} from "next";
 
-// Use HTTPS API URL if NEXT_PUBLIC_API_URL is not explicitly set
-// This ensures production builds always use HTTPS
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api.mrrc.online';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ||
+    (process.env.NODE_ENV === 'production'
+        ? (process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.mrrc.online')
+        : '');
 
 const nextConfig: NextConfig = {
     /* config options here */
