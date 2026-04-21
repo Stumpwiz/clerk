@@ -142,6 +142,15 @@ def build_latex_document(
         address_lines.append(city_state_zip_safe)
     inside_address = " \\\\\n".join(address_lines)
 
+    # Tunable layout constants for letter visual formatting
+    logo_width_in = 2.25
+    logo_top_offset_in = -0.10
+    # Position measured from left text block edge (1in page margin),
+    # equivalent to 4.5in from physical page left edge.
+    right_anchor_from_text_left_in = 3.5
+    paragraph_indent = "2em"
+    paragraph_spacing = "1.0\\baselineskip"
+
     # Build the complete LaTeX document
     latex_doc = f"""\\documentclass[11pt,letterpaper]{{article}}
 \\usepackage{{geometry}}
@@ -158,25 +167,28 @@ def build_latex_document(
 
 \\pagestyle{{empty}}
 \\setstretch{{1.0}}
+\\setlength{{\\parindent}}{{{paragraph_indent}}}
+\\setlength{{\\parskip}}{{{paragraph_spacing}}}
 
 \\newcommand{{\\salutation}}{{{salutation_safe}}}
 \\date{{{letter_date_str}}}
 
 \\begin{{document}}
 
+\\vspace*{{{logo_top_offset_in}in}}
 \\begin{{center}}
-    \\includegraphics[width=2.0in]{{../static/images/residentCouncilLogoSmall.jpg}} \\\\[0.5em]
+    \\includegraphics[width={logo_width_in}in]{{../static/images/residentCouncilLogoSmall.jpg}} \\\\[0.5em]
 \\end{{center}}
 
-\\vspace{{1em}}
+\\vspace{{0.6em}}
 
-\\noindent {letter_date_str}
+\\noindent\\hspace*{{{right_anchor_from_text_left_in}in}}{letter_date_str}
 
 \\vspace{{1em}}
 
 \\noindent {inside_address}
 
-\\vspace{{1.5em}}
+\\vspace{{1.0em}}
 
 \\noindent Dear \\salutation,
 
@@ -184,15 +196,16 @@ def build_latex_document(
 
 {body_latex}
 
-\\vspace{{1.5em}}
+\\vspace{{1.0em}}
 
-\\noindent Sincerely,
-
-\\vspace{{2em}}
-
-\\noindent {signer_name_safe} \\\\
+\\noindent\\hspace*{{{right_anchor_from_text_left_in}in}}\\parbox[t]{{2.6in}}{{%
+Sincerely,\\
+\\vspace{{1.5em}}\\
+{signer_name_safe} \\\\
 President, Residents Council \\\\
 Apartment {signer_apt_safe}
+}}
+
 
 \\end{{document}}"""
 
