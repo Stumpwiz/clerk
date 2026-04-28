@@ -9,11 +9,12 @@ A modern web application for managing retirement community administrative bodies
 - **Persons Management**: Maintain community members and residents
 - **Terms Management**: Assign persons to offices with terms
 - **Letters Generation**: Generate personalized welcome letters (LaTeX-based PDFs)
-- **Rosters & Reports**: Generate professional rosters and reports (4 types)
+- **Rosters & Reports**: Generate professional rosters and reports
   - Long Form Roster (detailed contact information)
   - Short Form Roster (condensed version)
   - Vacancies Report
   - Expiring Terms Report
+  - Hall Reps Email List
 - **User Management**: Clerk-based authentication with invitation system
 
 ## Tech Stack

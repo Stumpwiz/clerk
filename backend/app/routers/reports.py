@@ -4,6 +4,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from collections import defaultdict
 from datetime import date, datetime
@@ -295,6 +296,38 @@ def _build_committee_secretaries_data(db: Session) -> List[str]:
     )
 
 
+def _build_hall_reps_data(db: Session) -> List[str]:
+    # Match both "Hall Rep" and "Hall Representative" office title conventions.
+    normalized_title = func.lower(func.replace(Office.title, "-", " "))
+    query = (
+        db.query(Person.email)
+        .select_from(Term)
+        .join(Person, Person.person_id == Term.term_person_id)
+        .join(Office, Office.office_id == Term.term_office_id)
+        .join(Body, Body.body_id == Office.office_body_id)
+        .filter(
+            normalized_title.like("%hall rep%"),
+            Term.start <= date.today(),
+            (Term.end.is_(None)) | (Term.end >= date.today()),
+        )
+        .order_by(
+            Body.body_precedence.asc(),
+            Office.office_precedence.asc(),
+            Person.last.asc(),
+            Person.first.asc(),
+        )
+    )
+
+    raw_emails = []
+    for (email,) in query.all():
+        cleaned = _normalize_email(email)
+        if cleaned is None:
+            continue
+        raw_emails.append(cleaned)
+
+    return _dedupe_emails(raw_emails)
+
+
 # --- Registry ---
 
 REPORT_REGISTRY: Dict[str, ReportRegistryEntry] = {
@@ -366,6 +399,14 @@ REPORT_REGISTRY: Dict[str, ReportRegistryEntry] = {
         filename="committee_secretaries.txt",
         renderer_type="plain_text_file",
         builder_func=_build_committee_secretaries_data,
+    ),
+    "hall-reps": ReportRegistryEntry(
+        id="hall-reps",
+        label="Hall Reps",
+        description="Email list for active hall reps",
+        filename="hall_reps.txt",
+        renderer_type="plain_text_file",
+        builder_func=_build_hall_reps_data,
     ),
 }
 
@@ -614,11 +655,27 @@ def _get_committee_secretaries_emails(db: Session) -> List[str]:
     )
 
 
+def _get_hall_reps_emails(db: Session) -> List[str]:
+    """Helper to query active hall reps emails"""
+    return _build_hall_reps_data(db)
+
+
 @router.get("/committee-secretaries")
 async def generate_committee_secretaries_email_list(db: Session = Depends(get_db)):
     """Generate committee secretaries email list"""
     try:
         report = REPORT_REGISTRY["committee-secretaries"]
+        emails = report.builder_func(db)
+        return _render_text_report(report, emails)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/hall-reps")
+async def generate_hall_reps_email_list(db: Session = Depends(get_db)):
+    """Generate active hall reps email list"""
+    try:
+        report = REPORT_REGISTRY["hall-reps"]
         emails = report.builder_func(db)
         return _render_text_report(report, emails)
     except Exception as e:
