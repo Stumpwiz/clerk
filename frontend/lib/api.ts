@@ -32,13 +32,19 @@ class ApiClient {
         options: RequestInit = {}
     ): Promise<T> {
         const url = `${this.baseUrl}${endpoint}`;
+        const method = (options.method || "GET").toUpperCase();
+        const hasBody = options.body !== undefined && options.body !== null;
+        const headers = new Headers(options.headers || {});
+
+        // Match browser-simple request behavior when possible.
+        // Only send JSON content type when actually submitting a body.
+        if (hasBody && method !== "GET" && method !== "HEAD" && !headers.has("Content-Type")) {
+            headers.set("Content-Type", "application/json");
+        }
 
         const config: RequestInit = {
             ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers,
-            },
+            headers,
         };
 
         const response = await fetch(url, config);
@@ -58,7 +64,7 @@ class ApiClient {
 
     // Bodies
     async getBodies(): Promise<Body[]> {
-        return this.request<Body[]>('/api/bodies/');
+        return this.request<Body[]>('/api/bodies');
     }
 
     async getBody(id: number): Promise<Body> {
@@ -66,7 +72,7 @@ class ApiClient {
     }
 
     async createBody(data: Omit<Body, 'body_id'>): Promise<Body> {
-        return this.request<Body>('/api/bodies/', {
+        return this.request<Body>('/api/bodies', {
             method: 'POST',
             body: this.toJsonBody(data as unknown as Record<string, unknown>),
         });
@@ -87,7 +93,7 @@ class ApiClient {
 
     // Offices
     async getOffices(): Promise<Office[]> {
-        return this.request<Office[]>('/api/offices/');
+        return this.request<Office[]>('/api/offices');
     }
 
     async getOffice(id: number): Promise<Office> {
@@ -95,7 +101,7 @@ class ApiClient {
     }
 
     async createOffice(data: Omit<Office, 'office_id'>): Promise<Office> {
-        return this.request<Office>('/api/offices/', {
+        return this.request<Office>('/api/offices', {
             method: 'POST',
             body: this.toJsonBody(data as unknown as Record<string, unknown>),
         });
@@ -116,7 +122,7 @@ class ApiClient {
 
     // Persons
     async getPersons(): Promise<Person[]> {
-        return this.request<Person[]>('/api/persons/');
+        return this.request<Person[]>('/api/persons');
     }
 
     async getPerson(id: number): Promise<Person> {
@@ -124,7 +130,7 @@ class ApiClient {
     }
 
     async createPerson(data: Omit<Person, 'person_id'>): Promise<Person> {
-        return this.request<Person>('/api/persons/', {
+        return this.request<Person>('/api/persons', {
             method: 'POST',
             body: this.toJsonBody(data as unknown as Record<string, unknown>),
         });
@@ -145,7 +151,7 @@ class ApiClient {
 
     // Terms
     async getTerms(): Promise<Term[]> {
-        return this.request<Term[]>('/api/terms/');
+        return this.request<Term[]>('/api/terms');
     }
 
     async getTerm(personId: number, officeId: number): Promise<Term> {
@@ -153,7 +159,7 @@ class ApiClient {
     }
 
     async createTerm(data: Term): Promise<Term> {
-        return this.request<Term>('/api/terms/', {
+        return this.request<Term>('/api/terms', {
             method: 'POST',
             body: this.toJsonBody(data as unknown as Record<string, unknown>),
         });
@@ -174,11 +180,11 @@ class ApiClient {
 
     // Letter Template
     async getLetterTemplate(): Promise<LetterTemplate> {
-        return this.request<LetterTemplate>('/api/letter-template/');
+        return this.request<LetterTemplate>('/api/letter-template');
     }
 
     async updateLetterTemplate(data: Omit<LetterTemplate, 'id'>): Promise<LetterTemplate> {
-        return this.request<LetterTemplate>('/api/letter-template/', {
+        return this.request<LetterTemplate>('/api/letter-template', {
             method: 'PUT',
             body: this.toJsonBody(data as unknown as Record<string, unknown>),
         });

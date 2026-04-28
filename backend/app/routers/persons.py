@@ -11,7 +11,7 @@ from app.schemas.person import PersonCreate, PersonUpdate, PersonResponse
 router = APIRouter(prefix="/api/persons", tags=["Persons"])
 
 
-@router.get("/", response_model=List[PersonResponse])
+@router.get("", response_model=List[PersonResponse])
 def get_persons(db: Session = Depends(get_db)):
     """Get all persons"""
     persons = db.query(Person).order_by(Person.last, Person.first).all()
@@ -30,7 +30,7 @@ def get_person(person_id: int, db: Session = Depends(get_db)):
     return person
 
 
-@router.post("/", response_model=PersonResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PersonResponse, status_code=status.HTTP_201_CREATED)
 def create_person(person_data: PersonCreate, db: Session = Depends(get_db)):
     """Create a new person"""
     person = Person(**person_data.model_dump())

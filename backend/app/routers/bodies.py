@@ -11,7 +11,7 @@ from app.schemas.body import BodyCreate, BodyUpdate, BodyResponse
 router = APIRouter(prefix="/api/bodies", tags=["Bodies"])
 
 
-@router.get("/", response_model=List[BodyResponse])
+@router.get("", response_model=List[BodyResponse])
 def get_bodies(db: Session = Depends(get_db)):
     """Get all administrative bodies"""
     bodies = db.query(Body).order_by(Body.body_precedence).all()
@@ -30,7 +30,7 @@ def get_body(body_id: int, db: Session = Depends(get_db)):
     return body
 
 
-@router.post("/", response_model=BodyResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=BodyResponse, status_code=status.HTTP_201_CREATED)
 def create_body(body_data: BodyCreate, db: Session = Depends(get_db)):
     """Create a new body"""
     body = Body(**body_data.model_dump())

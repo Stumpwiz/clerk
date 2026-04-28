@@ -59,24 +59,25 @@ def test_committee_secretaries_excludes_residents_council_secretary(pg_session):
 
 
 def test_hall_reps_includes_only_active_with_email_and_dedupes(pg_session):
-    hall_body = Body(body_id=9101, name="North Hall", body_precedence=3.0)
-    pg_session.add(hall_body)
+    hall_body = Body(body_id=9101, name="North Hall Reps", body_precedence=3.0)
+    non_hall_body = Body(body_id=9102, name="North Hall Council", body_precedence=4.0)
+    pg_session.add_all([hall_body, non_hall_body])
     pg_session.flush()
 
     hall_rep_office = Office(
-        title="Hall Representative",
+        title="Representative",
         office_precedence=1.0,
         office_body_id=hall_body.body_id,
     )
     hall_rep_alt_office = Office(
-        title="Hall-Rep East",
+        title="Member",
         office_precedence=2.0,
         office_body_id=hall_body.body_id,
     )
     non_hall_office = Office(
-        title="Secretary",
+        title="Representative",
         office_precedence=3.0,
-        office_body_id=hall_body.body_id,
+        office_body_id=non_hall_body.body_id,
     )
     pg_session.add_all([hall_rep_office, hall_rep_alt_office, non_hall_office])
     pg_session.flush()

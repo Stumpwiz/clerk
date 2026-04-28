@@ -11,7 +11,7 @@ from app.schemas.office import OfficeCreate, OfficeUpdate, OfficeResponse
 router = APIRouter(prefix="/api/offices", tags=["Offices"])
 
 
-@router.get("/", response_model=List[OfficeResponse])
+@router.get("", response_model=List[OfficeResponse])
 def get_offices(db: Session = Depends(get_db)):
     """Get all offices"""
     offices = db.query(Office).order_by(Office.office_precedence).all()
@@ -30,7 +30,7 @@ def get_office(office_id: int, db: Session = Depends(get_db)):
     return office
 
 
-@router.post("/", response_model=OfficeResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=OfficeResponse, status_code=status.HTTP_201_CREATED)
 def create_office(office_data: OfficeCreate, db: Session = Depends(get_db)):
     """Create a new office"""
     office = Office(**office_data.model_dump())

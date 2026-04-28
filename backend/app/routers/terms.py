@@ -11,7 +11,7 @@ from app.schemas.term import TermCreate, TermUpdate, TermResponse
 router = APIRouter(prefix="/api/terms", tags=["Terms"])
 
 
-@router.get("/", response_model=List[TermResponse])
+@router.get("", response_model=List[TermResponse])
 def get_terms(db: Session = Depends(get_db)):
     """Get all terms"""
     terms = db.query(Term).all()
@@ -33,7 +33,7 @@ def get_term(person_id: int, office_id: int, db: Session = Depends(get_db)):
     return term
 
 
-@router.post("/", response_model=TermResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=TermResponse, status_code=status.HTTP_201_CREATED)
 def create_term(term_data: TermCreate, db: Session = Depends(get_db)):
     """Create a new term"""
     # Check if the term already exists

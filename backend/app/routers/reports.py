@@ -297,8 +297,8 @@ def _build_committee_secretaries_data(db: Session) -> List[str]:
 
 
 def _build_hall_reps_data(db: Session) -> List[str]:
-    # Match both "Hall Rep" and "Hall Representative" office title conventions.
-    normalized_title = func.lower(func.replace(Office.title, "-", " "))
+    # Hall reps are represented by body names such as "Shannon Hall Reps".
+    normalized_body_name = func.lower(Body.name)
     query = (
         db.query(Person.email)
         .select_from(Term)
@@ -306,7 +306,7 @@ def _build_hall_reps_data(db: Session) -> List[str]:
         .join(Office, Office.office_id == Term.term_office_id)
         .join(Body, Body.body_id == Office.office_body_id)
         .filter(
-            normalized_title.like("%hall rep%"),
+            normalized_body_name.like("% hall rep%"),
             Term.start <= date.today(),
             (Term.end.is_(None)) | (Term.end >= date.today()),
         )
