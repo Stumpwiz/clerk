@@ -161,7 +161,7 @@ def build_latex_document(
     letterpaper,
     left=1in,
     right=1in,
-    top=1.5in,
+    top=1.30in,
     bottom=1in
 }}
 
@@ -199,8 +199,7 @@ def build_latex_document(
 \\vspace{{1.0em}}
 
 \\noindent\\hspace*{{{right_anchor_from_text_left_in}in}}\\parbox[t]{{2.6in}}{{%
-Sincerely,\\
-\\vspace{{1.5em}}\\
+Sincerely,\\\\[2\\baselineskip]
 {signer_name_safe} \\\\
 President, Residents Council \\\\
 Apartment {signer_apt_safe}
