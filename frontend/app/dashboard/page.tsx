@@ -1,5 +1,5 @@
 import Link from "next/link";
-import {Briefcase, Users, UserCircle, Calendar, FileText, BarChart3, UsersRound, Settings} from "lucide-react";
+import {Briefcase, Users, UserCircle, Calendar, FileText, BarChart3, UsersRound, Settings, Mail} from "lucide-react";
 
 const cards = [
     {
@@ -38,11 +38,18 @@ const cards = [
         color: "bg-pink-500",
     },
     {
-        title: "Reports",
+        title: "Rosters & Reports",
         description: "Generate rosters and reports from database",
         href: "/dashboard/reports",
         icon: BarChart3,
         color: "bg-indigo-500",
+    },
+    {
+        title: "Mailing Lists",
+        description: "Generate mailing lists from current terms",
+        href: "/dashboard/mailing-lists",
+        icon: Mail,
+        color: "bg-cyan-600",
     },
   {
     title: "Users",

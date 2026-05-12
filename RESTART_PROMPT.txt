@@ -1,0 +1,192 @@
+Continuation of the Clerk project deployment/stabilization work, now entering the next feature phase.
+
+This file is a concise session handoff so a new dev chat can resume quickly with accurate context.
+
+---
+
+SYSTEM STATUS
+
+Deployment
+
+The Clerk system is deployed via GitHub Actions CI/CD to AWS App Runner.
+
+Backend API
+https://api.mrrc.online
+
+Frontend test interface
+https://test.mrrc.online
+
+Public Residents Association website (IONOS hosting)
+https://mrra.online
+
+The frontend uses api.mrrc.online for API calls.
+
+Current state: production-stable after cleanup + security guardrails.
+
+---
+
+DATABASE
+
+PostgreSQL hosted on AWS RDS.
+
+Server
+clerk-db.c4agslv7s5zu.us-east-1.rds.amazonaws.com
+
+Application user
+clerk_user
+
+SQLAlchemy URL pattern
+postgresql://clerk_user:<password>@clerk-db.c4agslv7s5zu.us-east-1.rds.amazonaws.com:5432/<dbname>
+
+Important
+DATABASE_URL is the single source of truth.
+
+---
+
+REPORTING ARCHITECTURE (CURRENT)
+
+Registry-driven design.
+
+Primary backend file
+backend/app/routers/reports.py
+
+Report metadata source
+REPORT_REGISTRY
+
+Metadata API
+GET /api/reports
+
+Fields returned
+id, label, description, filename, renderer_type
+
+Generation route pattern
+/api/reports/{id}
+
+Artifact route pattern (PDFs)
+/api/reports/pdfs/{filename}
+
+Frontend reports dashboard
+frontend/app/dashboard/reports/page.tsx
+
+Reports are currently sorted alphabetically by label.
+
+---
+
+CURRENT REPORT/LIST ITEMS
+
+PDF reports
+- short-roster
+- long-roster
+- vacancies
+- expirations
+- terms-report
+
+Plain-text email lists (currently living in reports area)
+- rc-officers
+- rc-officers-and-chairs
+- committee-secretaries
+
+Output format (must be preserved)
+- one email address per line
+- comma after each line except final line
+- suitable for direct Outlook paste
+
+---
+
+OTHER ACTIVE CONTEXT TO PRESERVE
+
+Terms report rules (already implemented)
+- excludes end = 9999-12-31
+- excludes title Liaison and Staff
+- sorted by body_precedence, office_precedence, first, last
+
+PDF pipeline
+- Jinja2 -> XeLaTeX -> PDF
+- main utility: backend/app/utils/pdf_generator.py
+- templates: backend/files_roster_reports
+
+IONOS short-roster publish
+- triggered by GET /api/reports/short-roster
+- uploads to /mrra/documents/roster.pdf via SFTP
+- credentials from AWS Secrets Manager
+
+Letters feature
+- POST /api/letters/generate
+- frontend route: /dashboard/letters
+- signer auto-sourced from current RC President
+- recent layout tuning completed and stable
+
+Local startup helpers
+- scripts/start_backend.sh
+- scripts/start_frontend.sh
+
+Security guardrails
+- local: .gitleaks.toml + .githooks/pre-commit
+- CI: .github/workflows/gitleaks.yml
+- .env remains untracked; .env.example tracked
+
+---
+
+NEXT ENHANCEMENT PHASE: EMAIL LISTS
+
+Objective
+Separate email-list generation from the Reports dashboard and make it a first-class feature.
+
+Primary goals
+1. Move existing plain-text email list functionality out of the reports card/dashboard area.
+2. Create a dedicated Email Lists card/page/feature.
+3. Keep output formatting exactly as today (one-per-line with trailing commas except final line).
+4. Preserve existing list types:
+   - rc-officers
+   - rc-officers-and-chairs
+   - committee-secretaries
+
+Critical new business rule
+Committee secretaries must not be inferred from committee names alone.
+
+Interpretation to implement
+- "committee-secretaries" should represent all current secretaries.
+- A secretary is identified via Term -> Office relationship where Office.title == "Secretary" (exact match).
+- Include Residents Council Secretary and committee/body secretaries intentionally.
+- Use model relationships and joins, not participant-name string matching.
+- Exclude missing/blank email values.
+- Apply stable/predictable sort order aligned with existing roster/report conventions where practical.
+
+Preferred architecture
+- Keep behavior registry-driven.
+- Either:
+  - add a parallel email-list registry, or
+  - cleanly separate email-list entries from PDF reports via category/renderer_type.
+- Preferred API/front-end split:
+  - GET /api/email-lists (metadata)
+  - GET /api/email-lists/{id} (generate output)
+  - /dashboard/email-lists (new dashboard route/card)
+- Avoid breaking existing /api/reports behavior unless deliberate compatibility wrappers are kept.
+
+Likely files to inspect first
+- backend/app/routers/reports.py
+- backend/app/models/* (Term, Office, Participant, Body/Committee relationships)
+- backend/app/schemas/* (if report/list metadata schemas are shared)
+- frontend/app/dashboard/reports/page.tsx
+- frontend dashboard navigation/layout files (where dashboard cards/routes are registered)
+
+Key risks
+- Accidentally breaking existing /api/reports consumers while extracting list functionality.
+- Incorrect secretary inclusion/exclusion due to join/filter mistakes.
+- Duplicate emails or unstable ordering after moving logic.
+- Hidden coupling in frontend report card assumptions (renderer_type/view buttons).
+
+Suggested first implementation steps
+1. Inventory current email-list implementations and exactly where each list id is defined and rendered.
+2. Design registry/API split (parallel registry vs categorized single registry) and choose minimal-change path.
+3. Implement backend email-list metadata + generation endpoints with backward-compatible wrappers if needed.
+4. Rework committee-secretaries query to Office.title == "Secretary" via Term relationships, with blank-email filtering and deterministic ordering.
+5. Add new frontend Email Lists route/card and wire to new metadata + generation endpoints.
+6. Keep reports dashboard focused on reports; remove or hide email-list items there once replacement route is live.
+7. Smoke-test all three list types plus existing reports endpoints.
+
+---
+
+END STATE BEFORE THIS PHASE
+
+The system is currently registry-driven, API-discoverable, frontend-synchronized, CI/CD deployed, and production-stable with security guardrails active.

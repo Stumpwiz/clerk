@@ -4,18 +4,24 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 from collections import defaultdict
 from datetime import date, datetime
 from pathlib import Path
-from typing import List, Iterable, Dict, Any, Callable, Optional
+from typing import List, Dict, Any, Callable, Optional
 from dataclasses import dataclass
 
 from app.database import get_db
-from app.models import ReportRecord, Term, Person, Office, Body
+from app.models import ReportRecord
 from app.utils.pdf_generator import PDFGenerator
 from app.utils.ionos_publisher import IONOSPublisherError, upload_pdf_to_ionos
+from app.utils.mailing_lists import (
+    get_committee_chairs_emails,
+    get_committee_secretaries_emails,
+    get_hall_reps_emails,
+    get_rc_officers_emails,
+    write_email_list_file,
+)
 from app.config import settings
 
 router = APIRouter(prefix="/api/reports", tags=["reports"])
@@ -25,7 +31,7 @@ logger = logging.getLogger(__name__)
 pdf_generator = PDFGenerator(settings.roster_reports_dir)
 
 
-ALLOWED_REPORT_SUFFIXES = {".pdf", ".txt"}
+ALLOWED_REPORT_SUFFIXES = {".pdf"}
 
 
 @dataclass
@@ -45,87 +51,6 @@ class ReportMetadata(BaseModel):
     description: str
     filename: str
     renderer_type: str
-
-
-def _normalize_email(email: str | None) -> str | None:
-    if email is None:
-        return None
-    cleaned = email.strip()
-    if not cleaned:
-        return None
-    return cleaned
-
-
-def _dedupe_emails(emails: Iterable[str]) -> List[str]:
-    seen = set()
-    ordered = []
-    for email in emails:
-        key = email.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        ordered.append(email)
-    return ordered
-
-
-def _format_email_lines(emails: List[str]) -> str:
-    if not emails:
-        return ""
-    lines = []
-    last_index = len(emails) - 1
-    for index, email in enumerate(emails):
-        suffix = "," if index < last_index else ""
-        lines.append(f"{email}{suffix}")
-    return "\n".join(lines)
-
-
-def _write_text_report(filename: str, emails: List[str]) -> Path:
-    report_path = pdf_generator.reports_dir / filename
-    content = _format_email_lines(emails)
-    try:
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(report_path, "w", encoding="utf-8") as handle:
-            handle.write(content)
-    except (PermissionError, OSError) as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to write report file at {report_path}: {exc}"
-        ) from exc
-    return report_path
-
-
-def _query_emails(
-    db: Session,
-    *,
-    body_name: str | None = None,
-    office_title: str | None = None,
-    exclude_body_name: str | None = None,
-) -> List[str]:
-    query = (
-        db.query(Person.email)
-        .select_from(Term)
-        .join(Person, Person.person_id == Term.term_person_id)
-        .join(Office, Office.office_id == Term.term_office_id)
-        .join(Body, Body.body_id == Office.office_body_id)
-    )
-
-    if body_name is not None:
-        query = query.filter(Body.name == body_name)
-    if exclude_body_name is not None:
-        query = query.filter(Body.name != exclude_body_name)
-    if office_title is not None:
-        query = query.filter(Office.title == office_title)
-
-    query = query.order_by(Body.body_precedence.asc(), Office.office_precedence.asc())
-
-    raw_emails = []
-    for (email,) in query.all():
-        cleaned = _normalize_email(email)
-        if cleaned is None:
-            continue
-        raw_emails.append(cleaned)
-
-    return _dedupe_emails(raw_emails)
 
 
 def _build_vacancies_dataset(db: Session) -> tuple[List[ReportRecord], dict[str, List[ReportRecord]]]:
@@ -274,60 +199,6 @@ def _build_terms_report_data(db: Session) -> Dict[str, Any]:
     }
 
 
-def _build_rc_officers_data(db: Session) -> List[str]:
-    return _query_emails(db, body_name="Residents Council")
-
-
-def _build_rc_officers_and_chairs_data(db: Session) -> List[str]:
-    officers = _query_emails(db, body_name="Residents Council")
-    chairs = _query_emails(
-        db,
-        office_title="Chair",
-        exclude_body_name="Residents Council"
-    )
-    return _dedupe_emails(officers + chairs)
-
-
-def _build_committee_secretaries_data(db: Session) -> List[str]:
-    return _query_emails(
-        db,
-        office_title="Secretary",
-        exclude_body_name="Residents Council"
-    )
-
-
-def _build_hall_reps_data(db: Session) -> List[str]:
-    # Hall reps are represented by body names such as "Shannon Hall Reps".
-    normalized_body_name = func.lower(Body.name)
-    query = (
-        db.query(Person.email)
-        .select_from(Term)
-        .join(Person, Person.person_id == Term.term_person_id)
-        .join(Office, Office.office_id == Term.term_office_id)
-        .join(Body, Body.body_id == Office.office_body_id)
-        .filter(
-            normalized_body_name.like("% hall rep%"),
-            Term.start <= date.today(),
-            (Term.end.is_(None)) | (Term.end >= date.today()),
-        )
-        .order_by(
-            Body.body_precedence.asc(),
-            Office.office_precedence.asc(),
-            Person.last.asc(),
-            Person.first.asc(),
-        )
-    )
-
-    raw_emails = []
-    for (email,) in query.all():
-        cleaned = _normalize_email(email)
-        if cleaned is None:
-            continue
-        raw_emails.append(cleaned)
-
-    return _dedupe_emails(raw_emails)
-
-
 # --- Registry ---
 
 REPORT_REGISTRY: Dict[str, ReportRegistryEntry] = {
@@ -375,38 +246,6 @@ REPORT_REGISTRY: Dict[str, ReportRegistryEntry] = {
         renderer_type="latex_pdf",
         template="terms_template.tex",
         builder_func=_build_terms_report_data,
-    ),
-    "rc-officers": ReportRegistryEntry(
-        id="rc-officers",
-        label="Residents Council Officers",
-        description="Email list for Residents Council officers",
-        filename="rc_officers.txt",
-        renderer_type="plain_text_file",
-        builder_func=_build_rc_officers_data,
-    ),
-    "rc-officers-and-chairs": ReportRegistryEntry(
-        id="rc-officers-and-chairs",
-        label="RC Officers and Chairs",
-        description="Combined email list for RC officers and committee chairs",
-        filename="rc_officers_and_chairs.txt",
-        renderer_type="plain_text_file",
-        builder_func=_build_rc_officers_and_chairs_data,
-    ),
-    "committee-secretaries": ReportRegistryEntry(
-        id="committee-secretaries",
-        label="Committee Secretaries",
-        description="Email list for all committee secretaries",
-        filename="committee_secretaries.txt",
-        renderer_type="plain_text_file",
-        builder_func=_build_committee_secretaries_data,
-    ),
-    "hall-reps": ReportRegistryEntry(
-        id="hall-reps",
-        label="Hall Reps",
-        description="Email list for active hall reps",
-        filename="hall_reps.txt",
-        renderer_type="plain_text_file",
-        builder_func=_build_hall_reps_data,
     ),
 }
 
@@ -459,7 +298,7 @@ def _publish_short_roster_to_ionos(pdf_path: Path):
 
 
 def _render_text_report(report: ReportRegistryEntry, emails: List[str]) -> FileResponse:
-    report_path = _write_text_report(report.filename, emails)
+    report_path = write_email_list_file(pdf_generator.reports_dir, report.filename, emails)
     return FileResponse(
         path=str(report_path),
         media_type="text/plain; charset=utf-8",
@@ -626,57 +465,71 @@ async def generate_terms_report(db: Session = Depends(get_db)):
 
 @router.get("/rc-officers")
 async def generate_rc_officers_email_list(db: Session = Depends(get_db)):
-    """Generate Residents Council officers email list"""
+    """Legacy compatibility endpoint for Residents Council officers email list"""
     try:
-        report = REPORT_REGISTRY["rc-officers"]
-        emails = report.builder_func(db)
-        return _render_text_report(report, emails)
+        report = ReportRegistryEntry(
+            id="rc-officers",
+            label="Residents Council Officers",
+            description="Email list for Residents Council officers",
+            filename="rc_officers.txt",
+            renderer_type="plain_text_file",
+        )
+        return _render_text_report(report, get_rc_officers_emails(db))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/rc-officers-and-chairs")
 async def generate_rc_officers_and_chairs_email_list(db: Session = Depends(get_db)):
-    """Generate combined RC officers + committee chairs email list"""
+    """Legacy compatibility endpoint; now returns committee chairs only"""
     try:
-        report = REPORT_REGISTRY["rc-officers-and-chairs"]
-        combined = report.builder_func(db)
-        return _render_text_report(report, combined)
+        report = ReportRegistryEntry(
+            id="committee-chairs",
+            label="Committee Chairs",
+            description="Email list for current committee chairs",
+            filename="committee_chairs.txt",
+            renderer_type="plain_text_file",
+        )
+        return _render_text_report(report, get_committee_chairs_emails(db))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 def _get_committee_secretaries_emails(db: Session) -> List[str]:
-    """Helper to query committee secretaries emails"""
-    return _query_emails(
-        db,
-        office_title="Secretary",
-        exclude_body_name="Residents Council"
-    )
+    return get_committee_secretaries_emails(db)
 
 
 def _get_hall_reps_emails(db: Session) -> List[str]:
-    """Helper to query active hall reps emails"""
-    return _build_hall_reps_data(db)
+    return get_hall_reps_emails(db)
 
 
 @router.get("/committee-secretaries")
 async def generate_committee_secretaries_email_list(db: Session = Depends(get_db)):
-    """Generate committee secretaries email list"""
+    """Legacy compatibility endpoint for committee secretaries email list"""
     try:
-        report = REPORT_REGISTRY["committee-secretaries"]
-        emails = report.builder_func(db)
-        return _render_text_report(report, emails)
+        report = ReportRegistryEntry(
+            id="committee-secretaries",
+            label="Committee Secretaries",
+            description="Email list for current secretaries",
+            filename="committee_secretaries.txt",
+            renderer_type="plain_text_file",
+        )
+        return _render_text_report(report, get_committee_secretaries_emails(db))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/hall-reps")
 async def generate_hall_reps_email_list(db: Session = Depends(get_db)):
-    """Generate active hall reps email list"""
+    """Legacy compatibility endpoint for hall reps email list"""
     try:
-        report = REPORT_REGISTRY["hall-reps"]
-        emails = report.builder_func(db)
-        return _render_text_report(report, emails)
+        report = ReportRegistryEntry(
+            id="hall-reps",
+            label="Hall Reps",
+            description="Email list for active hall reps",
+            filename="hall_reps.txt",
+            renderer_type="plain_text_file",
+        )
+        return _render_text_report(report, get_hall_reps_emails(db))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

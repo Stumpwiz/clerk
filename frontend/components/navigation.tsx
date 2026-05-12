@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import {usePathname} from "next/navigation";
 import {UserButton} from "@clerk/nextjs";
-import {Home, Users, Briefcase, UserCircle, Calendar, FileText, BarChart3, UsersRound} from "lucide-react";
+import {Home, Users, Briefcase, UserCircle, Calendar, FileText, BarChart3, UsersRound, Mail} from "lucide-react";
 
 const navItems = [
     {href: "/dashboard", label: "Dashboard", icon: Home},
@@ -13,7 +13,8 @@ const navItems = [
     {href: "/dashboard/persons", label: "Persons", icon: UserCircle},
     {href: "/dashboard/terms", label: "Terms", icon: Calendar},
     {href: "/dashboard/letters", label: "Letters", icon: FileText},
-    {href: "/dashboard/reports", label: "Reports", icon: BarChart3},
+    {href: "/dashboard/reports", label: "Rosters & Reports", icon: BarChart3},
+    {href: "/dashboard/mailing-lists", label: "Mailing Lists", icon: Mail},
     {href: "/dashboard/users", label: "Users", icon: UsersRound},
 ];
 
