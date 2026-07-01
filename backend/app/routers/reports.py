@@ -260,9 +260,7 @@ def _render_pdf_report(report: ReportRegistryEntry, context: Dict[str, Any]) -> 
         context=context
     )
 
-    # Special handling for short-roster IONOS publish
-    if report.id == "short-roster":
-        _publish_short_roster_to_ionos(pdf_path)
+    _run_post_generation_side_effects(report, pdf_path)
 
     return FileResponse(
         path=str(pdf_path),
@@ -272,29 +270,36 @@ def _render_pdf_report(report: ReportRegistryEntry, context: Dict[str, Any]) -> 
     )
 
 
-def _publish_short_roster_to_ionos(pdf_path: Path):
-    publish_enabled = settings.enable_ionos_roster_publish
+def _run_post_generation_side_effects(report: ReportRegistryEntry, pdf_path: Path) -> None:
+    if report.id == "short-roster":
+        _publish_short_roster_to_ionos(pdf_path)
+
+
+def _publish_short_roster_to_ionos(pdf_path: Path) -> None:
+    if not settings.enable_ionos_roster_publish:
+        logger.info("IONOS roster publication skipped (disabled for local development).")
+        return
+
     remote_path = "/mrra/documents/roster.pdf"
 
-    if publish_enabled:
-        try:
-            publish_result = upload_pdf_to_ionos(
-                local_pdf_path=pdf_path,
-                secret_name=settings.ionos_sftp_secret_name,
-                aws_region=settings.aws_region,
-                remote_path=remote_path,
-            )
-            logger.info(
-                "Short roster published to IONOS: %s",
-                publish_result["remote_path"],
-            )
-        except IONOSPublisherError as exc:
-            logger.exception("IONOS short roster publish failed: %s", exc)
-        except Exception as exc:
-            logger.exception(
-                "IONOS short roster publish failed: unexpected_error=%s",
-                exc.__class__.__name__,
-            )
+    try:
+        publish_result = upload_pdf_to_ionos(
+            local_pdf_path=pdf_path,
+            secret_name=settings.ionos_sftp_secret_name,
+            aws_region=settings.aws_region,
+            remote_path=remote_path,
+        )
+        logger.info(
+            "Short roster published to IONOS: %s",
+            publish_result["remote_path"],
+        )
+    except IONOSPublisherError as exc:
+        logger.exception("IONOS short roster publish failed: %s", exc)
+    except Exception as exc:
+        logger.exception(
+            "IONOS short roster publish failed: unexpected_error=%s",
+            exc.__class__.__name__,
+        )
 
 
 def _render_text_report(report: ReportRegistryEntry, emails: List[str]) -> FileResponse:
