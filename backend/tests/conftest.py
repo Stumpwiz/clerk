@@ -38,7 +38,7 @@ def _alembic_upgrade(url: str) -> None:
     # Run alembic from backend directory to ensure config resolution
     backend_dir = _ensure_backend_on_path()
     subprocess.run(
-        ["alembic", "-c", str(backend_dir / "alembic.ini"), "upgrade", "head"],
+        [sys.executable, "-m", "alembic", "-c", str(backend_dir / "alembic.ini"), "upgrade", "head"],
         cwd=str(backend_dir),
         check=True,
         env=env,
@@ -71,6 +71,7 @@ def pg_session(migrated_postgres: str) -> Iterator[Session]:
         conn.execute(text("DELETE FROM person"))
         conn.execute(text("DELETE FROM body"))
         conn.execute(text("DELETE FROM letters"))
+        conn.execute(text("DELETE FROM users"))
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
     try:
         with SessionLocal() as s:

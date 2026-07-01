@@ -13,7 +13,7 @@ from app.database import get_db
 from app.models import ReportRecord
 
 # Import routers
-from app.routers import bodies, offices, persons, terms, letters, reports, users, mailing_lists
+from app.routers import auth, bodies, offices, persons, terms, letters, reports, users, mailing_lists
 
 
 def _db_host_and_name(database_url: str) -> tuple[str, str]:
@@ -73,6 +73,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth.router)
 app.include_router(bodies.router)
 app.include_router(offices.router)
 app.include_router(persons.router)

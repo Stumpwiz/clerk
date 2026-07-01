@@ -53,6 +53,13 @@ class Settings(BaseSettings):
     clerk_secret_key: str = Field(default="", validation_alias="CLERK_SECRET_KEY")
     clerk_publishable_key: str = Field(default="", validation_alias="CLERK_PUBLISHABLE_KEY")
 
+    # Local authentication foundation
+    auth_secret_key: str = Field(default="dev-auth-secret-change-me", validation_alias="AUTH_SECRET_KEY")
+    session_cookie_name: str = Field(default="clerk_session", validation_alias="SESSION_COOKIE_NAME")
+    session_cookie_secure: bool = Field(default=False, validation_alias="SESSION_COOKIE_SECURE")
+    session_cookie_samesite: str = Field(default="lax", validation_alias="SESSION_COOKIE_SAMESITE")
+    session_ttl_seconds: int = Field(default=60 * 60 * 8, validation_alias="SESSION_TTL_SECONDS")
+
     # AWS (for production deployment)
     aws_region: str = Field(default="us-east-1", validation_alias="AWS_REGION")
     aws_access_key_id: str = Field(default="", validation_alias="AWS_ACCESS_KEY_ID")
