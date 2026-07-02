@@ -35,7 +35,9 @@ export default function UsersPage() {
             setLoading(true);
             setError(null);
 
-            const response = await fetch(`${API_BASE_URL}/api/users/list`);
+            const response = await fetch(`${API_BASE_URL}/api/users/list`, {
+                credentials: 'include',
+            });
 
             if (!response.ok) {
                 throw new Error('Failed to fetch users');
@@ -69,6 +71,7 @@ export default function UsersPage() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                credentials: 'include',
                 body: JSON.stringify({
                     email: inviteEmail,
                     redirect_url: `${window.location.origin}/sign-up`

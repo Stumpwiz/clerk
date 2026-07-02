@@ -31,7 +31,9 @@ export default function MailingListsPage() {
     const loadListsRegistry = useCallback(async () => {
         try {
             setLoadingRegistry(true);
-            const response = await fetch(`${API_BASE_URL}/api/mailing-lists`);
+            const response = await fetch(`${API_BASE_URL}/api/mailing-lists`, {
+                credentials: 'include',
+            });
 
             if (!response.ok) {
                 throw new Error('Failed to fetch mailing lists registry');
@@ -66,7 +68,9 @@ export default function MailingListsPage() {
         setError(null);
 
         try {
-            const response = await fetch(`${API_BASE_URL}${list.endpoint}`);
+            const response = await fetch(`${API_BASE_URL}${list.endpoint}`, {
+                credentials: 'include',
+            });
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
@@ -95,7 +99,9 @@ export default function MailingListsPage() {
         }
 
         try {
-            const response = await fetch(`${API_BASE_URL}${selected.endpoint}?_=${Date.now()}`);
+            const response = await fetch(`${API_BASE_URL}${selected.endpoint}?_=${Date.now()}`, {
+                credentials: 'include',
+            });
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }

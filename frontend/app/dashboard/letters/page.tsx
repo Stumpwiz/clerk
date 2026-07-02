@@ -68,7 +68,9 @@ export default function LettersPage() {
 
     const loadTemplate = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/letters/template`);
+            const response = await fetch(`${API_BASE_URL}/api/letters/template`, {
+                credentials: 'include',
+            });
             if (response.ok) {
                 const data = await response.json();
                 setTemplate(data);
@@ -81,7 +83,9 @@ export default function LettersPage() {
 
     const loadPdfs = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/letters/pdfs`);
+            const response = await fetch(`${API_BASE_URL}/api/letters/pdfs`, {
+                credentials: 'include',
+            });
             if (response.ok) {
                 const data = await response.json();
                 setPdfFiles(data);
@@ -144,6 +148,7 @@ export default function LettersPage() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                credentials: 'include',
                 body: JSON.stringify(request),
             });
 
@@ -182,6 +187,7 @@ export default function LettersPage() {
                 headers: {
                     'Content-Type': 'application/json',
                 },
+                credentials: 'include',
                 body: JSON.stringify({
                     body: editBody,
                 }),
@@ -200,12 +206,27 @@ export default function LettersPage() {
         }
     };
 
-    const handleViewPdf = () => {
+    const handleViewPdf = async () => {
         if (!selectedPdf) {
             alert('Please select a PDF file.');
             return;
         }
-        window.open(`${API_BASE_URL}/api/letters/pdfs/${selectedPdf}`, '_blank');
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/letters/pdfs/${selectedPdf}`, {
+                credentials: 'include',
+            });
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank', 'noopener,noreferrer');
+            setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        } catch (error) {
+            alert(`Error viewing PDF: ${error}`);
+        }
     };
 
     const handleDeletePdf = async () => {
@@ -221,6 +242,7 @@ export default function LettersPage() {
         try {
             const response = await fetch(`${API_BASE_URL}/api/letters/pdfs/${selectedPdf}`, {
                 method: 'DELETE',
+                credentials: 'include',
             });
 
             if (response.ok) {
