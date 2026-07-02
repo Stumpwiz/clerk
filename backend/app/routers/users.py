@@ -1,13 +1,18 @@
 # app/routers/users.py - User management via Clerk API
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Dict
 from pydantic import BaseModel, EmailStr
 import hashlib
 
+from app.auth.dependencies import require_authenticated_user
 from app.utils.clerk_client import clerk_client
 
-router = APIRouter(prefix="/api/users", tags=["users"])
+router = APIRouter(
+    prefix="/api/users",
+    tags=["users"],
+    dependencies=[Depends(require_authenticated_user)],
+)
 
 
 def get_gravatar_url(email: str, size: int = 200) -> str:

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Callable, Optional
 from dataclasses import dataclass
 
+from app.auth.dependencies import require_authenticated_user
 from app.database import get_db
 from app.models import ReportRecord
 from app.utils.pdf_generator import PDFGenerator
@@ -24,7 +25,11 @@ from app.utils.mailing_lists import (
 )
 from app.config import settings
 
-router = APIRouter(prefix="/api/reports", tags=["reports"])
+router = APIRouter(
+    prefix="/api/reports",
+    tags=["reports"],
+    dependencies=[Depends(require_authenticated_user)],
+)
 logger = logging.getLogger(__name__)
 
 # Initialize PDF generator

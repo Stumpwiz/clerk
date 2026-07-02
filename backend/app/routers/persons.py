@@ -4,11 +4,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 
+from app.auth.dependencies import require_authenticated_user
 from app.database import get_db
 from app.models import Person
 from app.schemas.person import PersonCreate, PersonUpdate, PersonResponse
 
-router = APIRouter(prefix="/api/persons", tags=["Persons"])
+router = APIRouter(
+    prefix="/api/persons",
+    tags=["Persons"],
+    dependencies=[Depends(require_authenticated_user)],
+)
 
 
 @router.get("", response_model=List[PersonResponse])
