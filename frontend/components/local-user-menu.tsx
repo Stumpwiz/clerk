@@ -8,13 +8,14 @@ import {logout} from "@/lib/auth";
 
 interface LocalUserMenuProps {
     user: LocalUser;
+    variant?: "default" | "compact";
 }
 
 function avatarSrc(user: LocalUser): string {
     return user.avatar_path || "/logo.svg";
 }
 
-export function LocalUserMenu({user}: LocalUserMenuProps) {
+export function LocalUserMenu({user, variant = "default"}: LocalUserMenuProps) {
     const router = useRouter();
     const [error, setError] = useState<string | null>(null);
     const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -32,6 +33,34 @@ export function LocalUserMenu({user}: LocalUserMenuProps) {
             setIsLoggingOut(false);
         }
     };
+
+    if (variant === "compact") {
+        return (
+            <div className="flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                    src={avatarSrc(user)}
+                    alt=""
+                    className="h-9 w-9 rounded-full border border-gray-200 bg-white object-cover"
+                />
+                <div className="hidden min-w-0 text-right sm:block">
+                    <div className="max-w-40 truncate text-sm font-medium text-gray-900">{user.display_name}</div>
+                    <div className="max-w-40 truncate text-xs text-gray-500">{user.email}</div>
+                </div>
+                <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    title="Logout"
+                    aria-label="Logout"
+                >
+                    <LogOut className="h-4 w-4"/>
+                </button>
+                {error && <span className="sr-only">{error}</span>}
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col gap-3">

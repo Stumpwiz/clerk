@@ -19,7 +19,7 @@ export default function Home() {
                         Go to Dashboard
                     </Link>
                     <Link
-                        href="/sign-in"
+                        href="/local-login"
                         className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
                     >
                         Sign In

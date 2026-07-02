@@ -7,7 +7,7 @@ import {login} from "@/lib/auth";
 
 function safeNext(rawNext: string | null): string {
     if (!rawNext || !rawNext.startsWith("/") || rawNext.startsWith("//")) {
-        return "/local-session";
+        return "/dashboard";
     }
     return rawNext;
 }
@@ -49,7 +49,7 @@ export default function LocalLoginPage() {
                 <div>
                     <h1 className="text-2xl font-semibold tracking-normal text-gray-950">Local Login</h1>
                     <p className="mt-2 text-sm text-gray-600">
-                        Sign in with a local Clerk account to validate the new authentication backend.
+                        Sign in with your local account to access the administration dashboard.
                     </p>
                 </div>
 

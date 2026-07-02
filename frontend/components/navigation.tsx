@@ -3,7 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 import {usePathname} from "next/navigation";
-import {UserButton} from "@clerk/nextjs";
+import {LocalUserMenu} from "@/components/local-user-menu";
+import type {LocalUser} from "@/lib/auth";
 import {Home, Users, Briefcase, UserCircle, Calendar, FileText, BarChart3, UsersRound, Mail} from "lucide-react";
 
 const navItems = [
@@ -18,7 +19,11 @@ const navItems = [
     {href: "/dashboard/users", label: "Users", icon: UsersRound},
 ];
 
-export function Navigation() {
+interface NavigationProps {
+    user: LocalUser;
+}
+
+export function Navigation({user}: NavigationProps) {
     const pathname = usePathname();
 
     return (
@@ -60,16 +65,7 @@ export function Navigation() {
                         </div>
                     </div>
                     <div className="flex items-center">
-                        <UserButton
-                            appearance={{
-                                elements: {
-                                    avatarBox: "h-10 w-10"
-                                }
-                            }}
-                            afterSignOutUrl="/sign-in"
-                            userProfileMode="navigation"
-                            userProfileUrl="/dashboard/profile"
-                        />
+                        <LocalUserMenu user={user} variant="compact"/>
                     </div>
                 </div>
             </div>
