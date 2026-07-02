@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
 
     # Application
-    app_name: str = "Clerk"
+    app_name: str = "Community Admin"
     debug: bool = Field(default=True, validation_alias="DEBUG")
     api_host: str = Field(default="0.0.0.0", validation_alias="API_HOST")
     api_port: int = Field(default=8000, validation_alias="API_PORT")
@@ -48,10 +48,6 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
-
-    # Authentication (Clerk)
-    clerk_secret_key: str = Field(default="", validation_alias="CLERK_SECRET_KEY")
-    clerk_publishable_key: str = Field(default="", validation_alias="CLERK_PUBLISHABLE_KEY")
 
     # Local authentication foundation
     auth_secret_key: str = Field(default="dev-auth-secret-change-me", validation_alias="AUTH_SECRET_KEY")

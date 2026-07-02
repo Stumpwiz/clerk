@@ -39,7 +39,7 @@ async def lifespan(_app: FastAPI):
 
 # Create FastAPI application
 app = FastAPI(
-    title="Clerk API",
+    title="Community Administration API",
     description="Community Administration System API",
     debug=settings.debug,
     version="2.0.0",
@@ -81,14 +81,14 @@ app.include_router(terms.router)
 app.include_router(letters.router)  # Now uses /api/letters prefix
 app.include_router(reports.router)  # Reports/rosters generation
 app.include_router(mailing_lists.router)  # Mailing list generation
-app.include_router(users.router)  # User management via Clerk
+app.include_router(users.router)  # Local user management
 
 
 @app.get("/")
 async def root():
     """Root endpoint - API health check"""
     return {
-        "message": "Clerk - Community Administration System API",
+        "message": "Community Administration System API",
         "version": "2.0.0",
         "status": "operational"
     }

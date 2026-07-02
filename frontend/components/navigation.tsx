@@ -27,23 +27,31 @@ export function Navigation({user}: NavigationProps) {
     const pathname = usePathname();
 
     return (
-        <nav className="bg-white border-b border-gray-200">
+        <nav className="border-b border-gray-200 bg-white shadow-sm">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="flex justify-between h-16">
-                    <div className="flex">
-                        <div className="flex-shrink-0 flex items-center">
-                            <Link href="/dashboard" className="flex items-center gap-2">
+                <div className="flex flex-col gap-3 py-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex min-w-0 items-center justify-between gap-4">
+                        <Link href="/dashboard" className="flex min-w-0 items-center gap-2">
+                            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md border border-blue-100 bg-blue-50">
                                 <Image
                                     src="/logo.svg"
-                                    alt="Clerk Logo"
-                                    width={32}
-                                    height={32}
-                                    className="h-8 w-8"
+                                    alt="Application logo"
+                                    width={28}
+                                    height={28}
+                                    className="h-7 w-7"
                                 />
-                                <span className="text-xl font-bold text-blue-600">Clerk</span>
-                            </Link>
+                            </span>
+                            <span className="truncate text-lg font-semibold tracking-normal text-gray-950">
+                                Community Admin
+                            </span>
+                        </Link>
+                        <div className="flex flex-shrink-0 items-center lg:hidden">
+                            <LocalUserMenu user={user} variant="compact"/>
                         </div>
-                        <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+                    </div>
+
+                    <div className="flex min-w-0 flex-1 items-center gap-3 lg:justify-end">
+                        <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto pb-1 lg:flex-none lg:pb-0">
                             {navItems.map((item) => {
                                 const Icon = item.icon;
                                 const isActive = pathname === item.href;
@@ -51,20 +59,21 @@ export function Navigation({user}: NavigationProps) {
                                     <Link
                                         key={item.href}
                                         href={item.href}
-                                        className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+                                        className={`inline-flex flex-shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${
                                             isActive
-                                                ? "border-blue-500 text-gray-900"
-                                                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
+                                                ? "bg-blue-50 text-blue-700"
+                                                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                                         }`}
                                     >
-                                        <Icon className="w-4 h-4 mr-2"/>
+                                        <Icon className="h-4 w-4"/>
                                         {item.label}
                                     </Link>
                                 );
                             })}
                         </div>
                     </div>
-                    <div className="flex items-center">
+
+                    <div className="hidden flex-shrink-0 items-center lg:flex">
                         <LocalUserMenu user={user} variant="compact"/>
                     </div>
                 </div>

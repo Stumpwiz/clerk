@@ -62,5 +62,5 @@ Access-Control-Allow-Origin: https://test.mrrc.online
 - All environment variables must be set together (you can't update just one)
 - Make sure to also include:
   - `DATABASE_URL` (your RDS connection string)
-  - `CLERK_SECRET_KEY`
-  - `CLERK_PUBLISHABLE_KEY`
+  - `AUTH_SECRET_KEY`
+  - `SESSION_COOKIE_NAME`

@@ -1,4 +1,4 @@
-# Frontend Dockerfile for Clerk application
+# Frontend Dockerfile for the community administration application
 # Multi-stage build for optimized production image
 
 # Stage 1: Dependencies
@@ -22,24 +22,12 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Set build-time environment variables
-ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_API_BASE_URL
-ARG NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
-ARG NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
-ARG NEXT_PUBLIC_CLERK_FALLBACK_REDIRECT_URL=/dashboard
-# Optional: force redirect after auth
-ARG NEXT_PUBLIC_CLERK_FORCE_REDIRECT_URL
 
 # Set environment variables for Next.js build
-ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
-ENV NEXT_PUBLIC_CLERK_SIGN_IN_URL=${NEXT_PUBLIC_CLERK_SIGN_IN_URL}
-ENV NEXT_PUBLIC_CLERK_SIGN_UP_URL=${NEXT_PUBLIC_CLERK_SIGN_UP_URL}
-ENV NEXT_PUBLIC_CLERK_FALLBACK_REDIRECT_URL=${NEXT_PUBLIC_CLERK_FALLBACK_REDIRECT_URL}
-# Optional: exported only if provided at build time
-ENV NEXT_PUBLIC_CLERK_FORCE_REDIRECT_URL=${NEXT_PUBLIC_CLERK_FORCE_REDIRECT_URL}
 
 # Disable Next.js telemetry during build
 ENV NEXT_TELEMETRY_DISABLED=1

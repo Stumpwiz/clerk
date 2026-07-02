@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-deploy_to_aws.py - Automated deployment script for Clerk application to AWS
+deploy_to_aws.py - Automated deployment script for the community administration application to AWS
 
 This script handles:
 1. Building Docker images for backend and frontend
@@ -264,30 +264,10 @@ def build_and_push_frontend(registry_url: str, project_root: Path) -> bool:
     frontend_path = project_root / "frontend"
     image_tag = f"{registry_url}/{CONFIG['ecr_frontend_repository']}"
 
-    # Get Clerk publishable key from environment or oldEnv
-    clerk_key = os.getenv('CLERK_PUBLISHABLE_KEY', '')
-    if not clerk_key:
-        # Try to read from oldEnv file
-        env_file = project_root / "oldEnv"
-        if env_file.exists():
-            with open(env_file) as f:
-                for line in f:
-                    if line.startswith('CLERK_PUBLISHABLE_KEY='):
-                        clerk_key = line.split('=', 1)[1].strip()
-                        break
-
-    if not clerk_key:
-        print_warning("CLERK_PUBLISHABLE_KEY not found in environment or oldEnv file")
-        print_warning("Frontend build may fail if Clerk authentication is required")
-
     # Build image with production configuration
     print_info("Building frontend Docker image with production settings...")
     build_args = [
         "--build-arg", f"NEXT_PUBLIC_API_URL={CONFIG['production_api_url']}",
-        "--build-arg", f"NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY={clerk_key}",
-        "--build-arg", "NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in",
-        "--build-arg", "NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up",
-        "--build-arg", "NEXT_PUBLIC_CLERK_FALLBACK_REDIRECT_URL=/dashboard",
     ]
 
     if not run_command(
@@ -409,7 +389,7 @@ def deploy_frontend(registry_url: str, project_root: Path) -> bool:
 def main():
     """Main deployment function"""
     parser = argparse.ArgumentParser(
-        description='Deploy Clerk application to AWS App Runner',
+        description='Deploy the community administration application to AWS App Runner',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -442,7 +422,7 @@ Examples:
     # Get project root
     project_root = Path(__file__).resolve().parent.parent
 
-    print_header("AWS Deployment Script for Clerk Application")
+    print_header("AWS Deployment Script for Community Administration Application")
     print_info(f"Project root: {project_root}")
     print_info(f"Target: {args.target}")
     print_info(f"AWS Region: {CONFIG['aws_region']}")

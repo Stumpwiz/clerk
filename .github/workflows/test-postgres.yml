@@ -35,8 +35,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://clerk_user:clerk_test_password@localhost:5432/clerk_test_db
-      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+      AUTH_SECRET_KEY: test-auth-secret
 
     steps:
     - name: Checkout code
@@ -178,7 +177,6 @@ jobs:
       working-directory: ./frontend
       run: |
         docker build -t clerk-frontend:test \
-          --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_placeholder \
           --build-arg NEXT_PUBLIC_API_URL=http://localhost:8000 \
           .
 

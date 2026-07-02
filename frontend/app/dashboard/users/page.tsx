@@ -1,30 +1,26 @@
 'use client';
 
 import {useState, useEffect} from 'react';
-import {Loader2, UserPlus, Mail, Calendar, User as UserIcon} from 'lucide-react';
+import {Loader2, Mail, Calendar, User as UserIcon} from 'lucide-react';
 
 const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_URL ?? '';
 
-interface ClerkUser {
-    id: string;
+interface LocalUser {
+    id: number;
     email: string;
-    first_name: string;
-    last_name: string;
-    created_at: number;
-    updated_at: number;
-    last_sign_in_at: number;
-    profile_image_url: string;
+    display_name: string;
+    avatar_path: string | null;
+    is_active: boolean;
+    last_login_at: string | null;
+    created_at: string;
+    updated_at: string;
 }
 
 export default function UsersPage() {
-    const [users, setUsers] = useState<ClerkUser[]>([]);
+    const [users, setUsers] = useState<LocalUser[]>([]);
     const [loading, setLoading] = useState(true);
-    const [showInviteModal, setShowInviteModal] = useState(false);
-    const [inviteEmail, setInviteEmail] = useState('');
-    const [inviting, setInviting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
     useEffect(() => {
         loadUsers();
@@ -53,68 +49,9 @@ export default function UsersPage() {
         }
     };
 
-    const handleInviteUser = async (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (!inviteEmail || !inviteEmail.includes('@')) {
-            setError('Please enter a valid email address');
-            return;
-        }
-
-        setInviting(true);
-        setError(null);
-        setSuccessMessage(null);
-
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/users/invite`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                    email: inviteEmail,
-                    redirect_url: `${window.location.origin}/sign-up`
-                }),
-            });
-
-            if (!response.ok) {
-                let errorMessage = `Failed to send invitation (HTTP ${response.status})`;
-                try {
-                    const errorData = await response.json();
-                    if (errorData.detail) {
-                        errorMessage = errorData.detail;
-                    }
-                } catch (e) {
-                    // If we can't parse JSON, use the generic message
-                    errorMessage = `Failed to send invitation: ${response.statusText}`;
-                }
-                throw new Error(errorMessage);
-            }
-
-            await response.json();
-
-            setSuccessMessage(`Invitation sent successfully to ${inviteEmail}!`);
-            setInviteEmail('');
-            setShowInviteModal(false);
-
-            // Refresh user list after a short delay
-            setTimeout(() => {
-                loadUsers();
-            }, 1000);
-
-        } catch (error) {
-            console.error('Error inviting user:', error);
-            const errorMsg = error instanceof Error ? error.message : 'Failed to send invitation';
-            setError(errorMsg);
-        } finally {
-            setInviting(false);
-        }
-    };
-
-    const formatDate = (timestamp: number) => {
+    const formatDate = (timestamp: string | null) => {
         if (!timestamp) return 'Never';
-        return new Date(timestamp).toLocaleDateString('en-US', {
+        return new Date(timestamp).toLocaleString('en-US', {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
@@ -137,27 +74,14 @@ export default function UsersPage() {
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
                     <p className="mt-2 text-sm text-gray-600">
-                        Manage users and send invitations via Clerk
+                        View local application users
                     </p>
                 </div>
-                <button
-                    onClick={() => setShowInviteModal(true)}
-                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                    <UserPlus className="h-5 w-5 mr-2"/>
-                    Invite New User
-                </button>
             </div>
 
             {error && (
                 <div className="bg-red-50 border border-red-200 rounded-md p-4">
                     <p className="text-sm text-red-700">{error}</p>
-                </div>
-            )}
-
-            {successMessage && (
-                <div className="bg-green-50 border border-green-200 rounded-md p-4">
-                    <p className="text-sm text-green-700">{successMessage}</p>
                 </div>
             )}
 
@@ -170,7 +94,7 @@ export default function UsersPage() {
 
                 {users.length === 0 ? (
                     <div className="p-6 text-center text-gray-500">
-                        No users found. Invite users to get started.
+                        No users found.
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -187,7 +111,10 @@ export default function UsersPage() {
                                     Joined
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Last Sign In
+                                    Last Login
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Status
                                 </th>
                             </tr>
                             </thead>
@@ -196,10 +123,10 @@ export default function UsersPage() {
                                 <tr key={user.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
-                                            {user.profile_image_url ? (
+                                            {user.avatar_path ? (
                                                 <img
-                                                    src={user.profile_image_url}
-                                                    alt={`${user.first_name} ${user.last_name}`}
+                                                    src={user.avatar_path}
+                                                    alt=""
                                                     className="h-10 w-10 rounded-full"
                                                 />
                                             ) : (
@@ -210,7 +137,7 @@ export default function UsersPage() {
                                             )}
                                             <div className="ml-4">
                                                 <div className="text-sm font-medium text-gray-900">
-                                                    {user.first_name} {user.last_name}
+                                                    {user.display_name}
                                                 </div>
                                             </div>
                                         </div>
@@ -228,7 +155,10 @@ export default function UsersPage() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {formatDate(user.last_sign_in_at)}
+                                        {formatDate(user.last_login_at)}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {user.is_active ? 'Active' : 'Inactive'}
                                     </td>
                                 </tr>
                             ))}
@@ -237,69 +167,6 @@ export default function UsersPage() {
                     </div>
                 )}
             </div>
-
-            {/* Invite User Modal */}
-            {showInviteModal && (
-                <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-                        <div className="px-6 py-4 border-b border-gray-200">
-                            <h3 className="text-lg font-medium text-gray-900">Invite New User</h3>
-                        </div>
-                        <form onSubmit={handleInviteUser}>
-                            <div className="p-6">
-                                <p className="text-sm text-gray-600 mb-4">
-                                    Send an invitation email to a new user. They will receive a link to create their
-                                    account.
-                                </p>
-                                <div>
-                                    <label htmlFor="invite_email" className="block text-sm font-medium text-gray-700">
-                                        Email Address
-                                    </label>
-                                    <input
-                                        type="email"
-                                        id="invite_email"
-                                        value={inviteEmail}
-                                        onChange={(e) => setInviteEmail(e.target.value)}
-                                        placeholder="user@example.com"
-                                        required
-                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm text-gray-900"
-                                    />
-                                </div>
-                            </div>
-                            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowInviteModal(false);
-                                        setInviteEmail('');
-                                        setError(null);
-                                    }}
-                                    className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={inviting}
-                                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                                >
-                                    {inviting ? (
-                                        <>
-                                            <Loader2 className="animate-spin h-4 w-4 mr-2"/>
-                                            Sending...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Mail className="h-4 w-4 mr-2"/>
-                                            Send Invitation
-                                        </>
-                                    )}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

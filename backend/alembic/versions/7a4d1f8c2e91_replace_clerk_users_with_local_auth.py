@@ -1,10 +1,10 @@
-"""Replace Clerk users table with local authentication users
+"""Replace external users table with local authentication users
 
 Revision ID: 7a4d1f8c2e91
 Revises: 3f2a7c1a9b10
 Create Date: 2026-07-01
 
-This migration intentionally does not migrate Clerk.com identities. Local user
+This migration intentionally does not migrate external identities. Local user
 accounts will be created manually when the local authentication flow is adopted.
 """
 

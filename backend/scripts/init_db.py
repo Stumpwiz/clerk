@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Initialize the database for the Clerk backend.
+Initialize the database for the community administration backend.
 
 Features:
 - Creates all tables from SQLAlchemy models (create_all)

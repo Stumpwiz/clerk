@@ -36,26 +36,31 @@ export function LocalUserMenu({user, variant = "default"}: LocalUserMenuProps) {
 
     if (variant === "compact") {
         return (
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 shadow-sm">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                    src={avatarSrc(user)}
-                    alt=""
-                    className="h-9 w-9 rounded-full border border-gray-200 bg-white object-cover"
-                />
-                <div className="hidden min-w-0 text-right sm:block">
-                    <div className="max-w-40 truncate text-sm font-medium text-gray-900">{user.display_name}</div>
-                    <div className="max-w-40 truncate text-xs text-gray-500">{user.email}</div>
+                    <img
+                        src={avatarSrc(user)}
+                        alt=""
+                        className="h-8 w-8 flex-shrink-0 rounded-full border border-gray-200 bg-white object-cover"
+                    />
+                    <div className="hidden min-w-0 sm:block">
+                        <div className="max-w-44 truncate text-sm font-semibold leading-5 text-gray-900">
+                            {user.display_name}
+                        </div>
+                        <div className="max-w-44 truncate text-xs leading-4 text-gray-500">{user.email}</div>
+                    </div>
                 </div>
                 <button
                     type="button"
                     onClick={handleLogout}
                     disabled={isLoggingOut}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-2.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                     title="Logout"
                     aria-label="Logout"
                 >
                     <LogOut className="h-4 w-4"/>
+                    <span className="hidden xl:inline">{isLoggingOut ? "Signing out" : "Logout"}</span>
                 </button>
                 {error && <span className="sr-only">{error}</span>}
             </div>
