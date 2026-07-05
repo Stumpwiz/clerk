@@ -2,7 +2,7 @@
 
 Migration Date: January 15, 2025
 
-Status: ✅ Local Development Complete | ⏳ AWS RDS Deployment Pending
+Status: Complete for local development, Docker workflows, and production deployment
 
 Database: PostgreSQL 18.1 (Exclusive)
 
@@ -11,7 +11,7 @@ Database: PostgreSQL 18.1 (Exclusive)
 ## 1. Migration Overview
 
 ### Executive Summary
-The Clerk Community Administration System has been migrated from SQLite to PostgreSQL 18.1. PostgreSQL is now used exclusively across all environments (local development, Docker, and production on AWS RDS). This change improves reliability, scalability, security, and developer experience. No SQLite fallback remains in the codebase or configuration.
+The Community Administration System has been migrated from SQLite to PostgreSQL 18.1. PostgreSQL is now used exclusively across all environments (local development, Docker, and production on AWS RDS). This change improves reliability, scalability, security, and developer experience. No SQLite fallback remains in the codebase or configuration.
 
 ### Why We Migrated (SQLite Limitations vs PostgreSQL Benefits)
 
@@ -34,7 +34,7 @@ PostgreSQL benefits:
 
 | Area | Before (SQLite) | After (PostgreSQL 18.1) |
 |---|---|---|
-| Connection URL | `sqlite:///./instance/community_admin.db` | `postgresql://clerk_user:clerk_password@db:5432/clerk_community_admin` |
+| Connection URL | `sqlite:///./instance/community_admin.db` | `postgresql://<db-user>:<db-password>@db:5432/<database-name>` |
 | Driver | builtin `sqlite3` | `psycopg2` |
 | Container Orchestration | No DB container | Dedicated `db` service (Postgres) with healthcheck |
 | Migrations | Alembic (limited types) | Alembic with Postgres types and server defaults |
@@ -118,17 +118,18 @@ The workflows below ensure consistent behavior across local, Docker, and product
    ```
 3. Set `DATABASE_URL` in `.env`:
    ```
-   DATABASE_URL=postgresql://clerk_user:clerk_password@localhost:5432/clerk_community_admin
+   Set DATABASE_URL to your local PostgreSQL database URL.
    ```
 4. Apply migrations:
    ```
    cd backend
    alembic upgrade head
    ```
-5. Run backend and frontend as usual.
+5. Create the first local administrator with `python backend/scripts/create_local_user.py` if the target database has no active users.
+6. Run backend and frontend as usual.
 
 ### 4.2 Docker (recommended for dev)
-1. Ensure `.env` has Clerk keys and the default Docker Postgres `DATABASE_URL` is used by compose.
+1. Ensure `.env` has the default Docker Postgres `DATABASE_URL`, `AUTH_SECRET_KEY`, and local-auth cookie settings.
 2. Start services:
    ```
    docker compose up --build
@@ -141,13 +142,14 @@ The workflows below ensure consistent behavior across local, Docker, and product
 2. Create database and user (same as local, but on RDS instance). Enforce SSL.
 3. Set `DATABASE_URL` to the RDS endpoint:
    ```
-   DATABASE_URL=postgresql://clerk_user:REDACTED@<rds-endpoint>:5432/clerk_community_admin
+   Set DATABASE_URL to your RDS PostgreSQL database URL.
    ```
 4. Run Alembic migrations from your CI/CD runner or on container startup (ensure minimal downtime):
    ```
    cd backend && alembic upgrade head
    ```
 5. Configure security groups, IAM, backups, monitoring (CloudWatch), and alarms.
+6. Configure local-auth settings (`AUTH_SECRET_KEY`, `SESSION_COOKIE_SECURE`, `SESSION_COOKIE_SAMESITE`, `SESSION_TTL_SECONDS`) and create the first local administrator if needed.
 
 ---
 
@@ -237,10 +239,9 @@ Note: Rollback to SQLite is not supported. PostgreSQL is exclusive.
 
 ## 11. Next Steps
 
-- [ ] Finalize AWS RDS provisioning and networking.
-- [ ] Configure automated migrations in CI/CD for production deploys.
-- [ ] Set up monitoring: CloudWatch metrics, alarms, error budgets.
-- [ ] Configure backups, PITR testing, and periodic restore drills.
+- [x] Finalize AWS RDS provisioning and networking.
+- [x] Configure production deployment against AWS RDS.
+- [ ] Keep monitoring, backup verification, PITR testing, and periodic restore drills current.
 - [ ] Evaluate connection pooling (PgBouncer) if load requires.
 - [ ] Document DBA runbooks for on-call.
 
@@ -259,4 +260,4 @@ Note: Rollback to SQLite is not supported. PostgreSQL is exclusive.
 
 ## Conclusion
 
-The migration to PostgreSQL 18.1 is complete for local development and Docker workflows, with production deployment to AWS RDS pending. PostgreSQL is now the single, exclusive database across all environments. This shift unlocks improved reliability, performance, and operational maturity for the Clerk Community Administration System.
+The migration to PostgreSQL 18.1 is complete for local development, Docker workflows, and production deployment to AWS RDS. PostgreSQL is now the single, exclusive database across all environments. This shift unlocks improved reliability, performance, and operational maturity for the Community Administration System.

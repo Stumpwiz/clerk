@@ -1,6 +1,6 @@
-### Backup and Restore Guide (SQLite, PostgreSQL, and AWS RDS)
+### Backup and Restore Guide (PostgreSQL and AWS RDS)
 
-This guide explains how to back up and restore your database for both local environments (SQLite and PostgreSQL) and AWS RDS PostgreSQL. It also includes snapshot, point-in-time recovery (PITR) notes, and verification steps.
+This guide explains how to back up and restore PostgreSQL databases for local environments and AWS RDS PostgreSQL. It also includes snapshot, point-in-time recovery (PITR) notes, and verification steps.
 
 #### Prerequisites
 - Python 3 with project requirements installed.
@@ -10,7 +10,7 @@ This guide explains how to back up and restore your database for both local envi
 
 ---
 
-### Local backups (SQLite and PostgreSQL)
+### Local PostgreSQL backups
 
 Back up using:
 ```
@@ -18,15 +18,14 @@ python backend/scripts/backup_database.py
 ```
 
 What it does:
-- Detects DB type from app.config.get_database_url().
+- Detects the database URL from app.config.get_database_url().
 - Stores backups under backend/backups/ with a UTC timestamp.
-- SQLite: copies the .db file (after verifying a SQLite header).
 - PostgreSQL: runs pg_dump -Fc to create a custom-format dump suitable for pg_restore.
 
 Options:
 - Override the database URL:
 ```
-python backend/scripts/backup_database.py --database-url postgresql://user:pass@host:5432/db
+python backend/scripts/backup_database.py --database-url postgresql://<db-user>:<db-password>@<db-host>:5432/<database-name>
 ```
 - Upload to S3 after local backup:
 ```
@@ -39,7 +38,7 @@ Safety notes:
 
 ---
 
-### Local restores (SQLite and PostgreSQL)
+### Local PostgreSQL restores
 
 Restore using:
 ```
@@ -50,7 +49,6 @@ What it does:
 - Validates backup file format.
 - Dry-run support (--dry-run).
 - Prompts for confirmation unless --force is provided.
-- SQLite: makes a pre-restore copy of the current DB at *.pre-restore.<timestamp>, then replaces it.
 - PostgreSQL: restores .dump files via pg_restore --clean --if-exists --no-owner --no-privileges; .sql files via psql -v ON_ERROR_STOP=1.
 
 Examples:
@@ -60,7 +58,7 @@ python backend/scripts/restore_database.py --backup backend/backups/postgres_db@
 ```
 - Force restore to a specific database URL:
 ```
-python backend/scripts/restore_database.py --backup path/to/file.dump --database-url postgresql://user:pass@host:5432/db --force
+python backend/scripts/restore_database.py --backup path/to/file.dump --database-url postgresql://<db-user>:<db-password>@<db-host>:5432/<database-name> --force
 ```
 
 Post-restore validation:

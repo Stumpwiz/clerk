@@ -64,3 +64,6 @@ Access-Control-Allow-Origin: https://test.mrrc.online
   - `DATABASE_URL` (your RDS connection string)
   - `AUTH_SECRET_KEY`
   - `SESSION_COOKIE_NAME`
+  - `SESSION_COOKIE_SECURE`
+  - `SESSION_COOKIE_SAMESITE`
+  - `SESSION_TTL_SECONDS`

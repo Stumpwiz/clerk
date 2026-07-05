@@ -1,275 +1,270 @@
 # Community Administration System
 
-A modern web application for managing retirement community administrative bodies, offices, terms, and generating official documents.
+A web application for managing retirement community administrative bodies, offices, terms, user accounts, and official documents.
 
 ## Features
 
-- **Bodies Management**: Manage administrative bodies and committees
-- **Offices Management**: Track committee positions and roles
-- **Persons Management**: Maintain community members and residents
-- **Terms Management**: Assign persons to offices with terms
-- **Letters Generation**: Generate personalized welcome letters (LaTeX-based PDFs)
-- **Rosters & Reports**: Generate professional rosters and reports
-  - Long Form Roster (detailed contact information)
-  - Short Form Roster (condensed version)
-  - Vacancies Report
-  - Expiring Terms Report
-  - Hall Reps Email List
-- **User Management**: Local authenticated application users
+- **Bodies Management**: Manage administrative bodies and committees.
+- **Offices Management**: Track committee positions and roles.
+- **Persons Management**: Maintain community members and residents.
+- **Terms Management**: Assign persons to offices with terms.
+- **Letters Generation**: Generate personalized welcome letters as LaTeX-based PDFs.
+- **Rosters & Reports**: Generate long-form rosters, short-form rosters, vacancy reports, expiring-term reports, and email lists.
+- **Local Authentication**: Secure local login with HTTP-only signed cookies and backend-enforced protected routes.
+- **User Management**: List users, add users, edit display names and active status, change your own password, and reset another user's password.
 
 ## Tech Stack
 
 ### Frontend
-- **Next.js 15** - React framework
-- **TypeScript** - Type-safe JavaScript
-- **Tailwind CSS** - Utility-first CSS
-- **Lucide React** - Icon library
+
+- **Next.js 15**
+- **TypeScript**
+- **Tailwind CSS**
+- **Lucide React**
 
 ### Backend
-- **FastAPI** - Modern Python web framework
-- **SQLAlchemy** - SQL toolkit and ORM
-- **PostgreSQL 18.1** - Production-grade relational database
-- **Alembic** - Database migrations
-- **psycopg2** - PostgreSQL adapter for Python
-- **Jinja2** - Template engine for LaTeX documents
-- **XeLaTeX** - PDF generation engine
 
-## Prerequisites
+- **FastAPI**
+- **SQLAlchemy**
+- **PostgreSQL 18.1+**
+- **Alembic**
+- **psycopg2**
+- **Jinja2**
+- **XeLaTeX**
 
-- **Docker & Docker Compose** (recommended)
-  - OR -
-- **Node.js 20+** and **Python 3.13+**
-- **PostgreSQL 18.1+** (required for all environments)
+## Authentication Overview
 
-> **Note**: If you have native PostgreSQL installed, configure it for **Manual** startup to avoid port conflicts with Docker PostgreSQL. See [Development Workflow](#development-workflow) below.
+The application uses local authentication backed by the `users` table.
 
-## Development Workflow
+- Email is the only login identifier.
+- Passwords are hashed by the backend and plaintext passwords are never stored.
+- Successful login issues a signed HTTP-only session cookie.
+- Logout clears the session cookie.
+- Backend routers enforce authentication before returning protected application data.
+- Inactive users cannot log in.
+- There are no roles or permissions; every active authenticated user is trusted to use the administrative application.
 
-### First-Time Setup
+See [Local Authentication Architecture](docs/authentication_architecture.md) for the full login, logout, user lifecycle, password management, and deployment model.
 
-If you have native PostgreSQL 18 installed on Windows, prevent port conflicts:
+## Required Environment Variables
 
-1. Press **Win + R**, type `services.msc`, press Enter
-2. Find **"postgresql-x64-18 - PostgreSQL Server 18"**
-3. Right-click → **Properties**
-4. Change **Startup type** to **Manual**
-5. Click **OK**
+### Backend
 
-This ensures Docker PostgreSQL can use port 5432 without conflicts.
+Required:
 
-### Daily Startup
+- `DATABASE_URL`: PostgreSQL connection string.
+- `AUTH_SECRET_KEY`: high-entropy secret used to sign session cookies.
+- `CORS_ORIGINS`: comma-separated list of allowed frontend origins.
 
-1. **Start Docker Desktop** (if not already running)
-2. **Open project** in PyCharm or your preferred IDE
-3. **Start the Docker stack** (in terminal):
-   ```bash
-   docker-compose up
-   ```
+Recommended:
 
-   Wait for the startup message:
-   ```
-   *** Community Admin started ***
-   Database: postgresql://clerk_user:***@db:5432/clerk_community_admin
-   API Docs: http://0.0.0.0:8000/docs
-   ```
+- `SESSION_COOKIE_NAME`: defaults to `clerk_session` for continuity with existing deployments.
+- `SESSION_COOKIE_SECURE`: set to `true` for HTTPS production.
+- `SESSION_COOKIE_SAMESITE`: usually `lax`; review for cross-site frontend/backend deployments.
+- `SESSION_TTL_SECONDS`: signed session lifetime in seconds.
+- `DEBUG`: set to `false` in production.
 
-4. **Access the application**:
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - API Docs: http://localhost:8000/docs
+### Frontend
 
-### Daily Shutdown
+- `NEXT_PUBLIC_API_URL`: browser-visible backend API base URL.
 
-```bash
-# Stop and remove containers
-docker-compose down
+No third-party identity-provider environment variables are required.
 
-# Or stop containers but keep them (faster restart)
-docker-compose stop
-```
+## Local Development Setup
 
-### Useful Commands
+### 1. Prerequisites
+
+- Node.js 20+
+- Python 3.13+
+- PostgreSQL 18.1+
+- XeLaTeX for PDF generation
+
+If you use a local PostgreSQL service and Docker on the same machine, make sure only one PostgreSQL server is bound to port `5432`.
+
+### 2. Configure PostgreSQL
+
+Create the local database and user:
 
 ```bash
-# View logs in real-time
-docker-compose logs -f
-
-# View logs for specific service
-docker-compose logs -f backend
-docker-compose logs -f frontend
-
-# Restart a single service
-docker-compose restart backend
-
-# Rebuild after code changes
-docker-compose up --build
-
-# Clean restart (removes volumes/data)
-docker-compose down -v
-docker-compose up --build
-```
-
-## Quick Start (Docker with PostgreSQL)
-
-### 1. Clone the Repository
-
-```bash
-git clone <repository-url>
-cd clerk-community-admin
-```
-
-### 2. Set Up Environment Variables
-
-```bash
-# Copy the example file
-cp backend/.env.example backend/.env
-
-# Edit backend/.env and set DATABASE_URL and AUTH_SECRET_KEY.
-```
-
-### 3. Start with Docker Compose
-
-```bash
-# Start all services (PostgreSQL + Backend + Frontend)
-docker-compose up --build
-
-# Or use the convenience script
-./start-docker.sh  # Linux/Mac
-start-docker.bat   # Windows
-```
-
-Services will be available at:
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **API Docs**: http://localhost:8000/docs
-- **PostgreSQL**: localhost:5432
-
-### 4. Access the Application
-
-1. Open http://localhost:3000 in your browser
-2. Sign in with a local application account
-3. Start managing your community data!
-
-## Quick Start (Local Development)
-
-### 1. Set Up PostgreSQL Database
-
-```bash
-# Ensure PostgreSQL 18.1+ is installed on your system
-# Create the database and user
 psql -U postgres -f backend/scripts/setup_local_postgres.sql
 ```
 
-This creates:
+Default local database values:
+
 - Database: `clerk_community_admin`
 - User: `clerk_user`
 - Password: `clerk_password`
 
-### 2. Backend Setup
+### 3. Configure Backend
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Edit `backend/.env` and set at least:
+
+```bash
+# Set DATABASE_URL to your PostgreSQL database URL.
+AUTH_SECRET_KEY=replace-with-a-local-development-secret
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+SESSION_COOKIE_SECURE=false
+SESSION_COOKIE_SAMESITE=lax
+```
+
+Install and migrate:
 
 ```bash
 cd backend
-
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install dependencies
+python -m venv ../.venv
+source ../.venv/bin/activate
 pip install -r requirements.txt
-
-# Set environment variable
-export DATABASE_URL=postgresql://clerk_user:clerk_password@localhost:5432/clerk_community_admin
-
-# Run migrations
 alembic upgrade head
+```
 
-# Start the backend
+Create the first local administrator:
+
+```bash
+python scripts/create_local_user.py
+```
+
+The script prompts for email, display name, password, and password confirmation. It creates an active local user with a hashed password.
+
+Start the backend:
+
+```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 3. Frontend Setup
+### 4. Configure Frontend
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
+cp .env.example .env.local
+```
 
-# Create .env.local with frontend settings
-cp .env.local.example .env.local
-# Edit .env.local if you need to override the API URL
+Edit `frontend/.env.local` if needed:
 
-# Start the frontend
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+Start the frontend:
+
+```bash
 npm run dev
 ```
 
+### 5. Authenticate Locally
+
+1. Open `http://localhost:3000/local-login`.
+2. Sign in with the local administrator created by `backend/scripts/create_local_user.py`.
+3. Confirm the dashboard loads.
+4. Use the Users page to add and maintain additional local users.
+
+## Deployment Requirements
+
+Before deploying:
+
+1. Set backend environment variables:
+   - `DATABASE_URL`
+   - `AUTH_SECRET_KEY`
+   - `CORS_ORIGINS`
+   - `SESSION_COOKIE_SECURE=true`
+   - `SESSION_COOKIE_SAMESITE=lax` or the value required by your frontend/backend domain topology
+   - `SESSION_TTL_SECONDS`
+   - `DEBUG=false`
+2. Set frontend environment variables:
+   - `NEXT_PUBLIC_API_URL`
+3. Run Alembic migrations against the production PostgreSQL database.
+4. Bootstrap the first local administrator if the target database has no active users.
+5. Confirm the production frontend origin is present in `CORS_ORIGINS`.
+
+After deploying:
+
+1. Sign in through `/local-login`.
+2. Confirm dashboard access, logout, and refresh behavior.
+3. Confirm active users can log in and inactive users cannot.
+4. Verify Add User, Edit User, Change Password, and Administrator Reset Password.
+
 ## Architecture
 
-### Database Architecture
-- **Production**: AWS RDS PostgreSQL 18.1
-- **Local Development**: Docker PostgreSQL or native PostgreSQL
-- **Migrations**: Alembic-based schema versioning
-- **Backup**: Automated daily backups with 7-day retention
+### Database
 
-### Deployment Architecture
-- **Frontend**: AWS App Runner (containerized Next.js)
-- **Backend**: AWS App Runner (containerized FastAPI)
-- **Database**: AWS RDS PostgreSQL (Multi-AZ optional)
-- **Authentication**: Local FastAPI session cookies
-- **File Storage**: Container volumes (letters & reports)
+- **Production**: AWS RDS PostgreSQL 18.1+
+- **Local Development**: Local or containerized PostgreSQL
+- **Migrations**: Alembic
+- **Backups**: PostgreSQL logical backups and AWS RDS snapshots
+
+### Deployment
+
+- **Frontend**: AWS App Runner containerized Next.js
+- **Backend**: AWS App Runner containerized FastAPI
+- **Database**: AWS RDS PostgreSQL
+- **Authentication**: Local signed HTTP-only cookies
+- **File Storage**: Generated letter and report directories
 
 ## Documentation
 
-- **[Database Migration Guide](docs/database-migration-complete.md)** - Complete migration documentation
-- **[AWS Deployment Guide](docs/aws-deployment-context.md)** - Production deployment instructions
-- **[Backup & Restore Guide](docs/backup-and-restore-guide.md)** - Backup and recovery procedures
-- **[Backend README](backend/README.md)** - Backend setup and API documentation
+- [Local Authentication Architecture](docs/authentication_architecture.md)
+- [Database Migration Guide](docs/database-migration-complete.md)
+- [CORS Configuration Guide](docs/cors-configuration.md)
+- [Backup & Restore Guide](docs/backup-and-restore-guide.md)
+- [Report Registry](docs/report_registry.md)
+- [Backend README](backend/README.md)
+- [Frontend README](frontend/README.md)
+- [Changelog](CHANGELOG.md)
 
 ## Local Development Guardrails
 
 To reduce the chance of committing secrets, this repository includes secret-scanning guardrails that run both locally and in GitHub Actions.
 
 ### Local Pre-commit Hook
-1. **Install gitleaks**: Ensure you have [gitleaks](https://github.com/gitleaks/gitleaks) installed locally.
-2. **Configure hooks path**: Run the following command in the project root to enable repo-local hooks:
+
+1. Install `gitleaks`.
+2. Configure the repo-local hooks path:
+
    ```bash
    git config core.hooksPath .githooks
    ```
 
-Once enabled, `gitleaks` will automatically scan staged changes for secrets before every commit using a custom `.gitleaks.toml` configuration and abort if any are detected.
+Once enabled, `gitleaks` scans staged changes for secrets before every commit using `.gitleaks.toml`.
 
 ### GitHub Actions CI
-All push and pull request events to `master` are automatically scanned for secrets using the same `.gitleaks.toml` rules.
+
+Push and pull request events to `master` are scanned for secrets using the same `.gitleaks.toml` rules.
 
 ## Project Structure
 
-```
+```text
 clerk-community-admin/
 ├── backend/                    # FastAPI backend
-│   ├── app/                   # Application code
-│   ├── alembic/               # Database migrations
-│   ├── scripts/               # Utility scripts
-│   ├── tests/                 # Test suite
+│   ├── app/                    # Application code
+│   ├── alembic/                # Database migrations
+│   ├── scripts/                # Utility scripts
+│   ├── tests/                  # Test suite
 │   └── Dockerfile
-├── frontend/                  # Next.js frontend
-│   ├── src/                   # React components
+├── frontend/                   # Next.js frontend
+│   ├── app/                    # App Router pages
+│   ├── components/             # Shared UI components
+│   ├── lib/                    # Frontend API/auth helpers
 │   └── Dockerfile
-├── docs/                      # Documentation
-├── scripts/                   # Deployment scripts
-└── docker-compose.yml         # Docker orchestration
+├── docs/                       # Documentation
+└── scripts/                    # Deployment and operations scripts
 ```
 
 ## Contributing
 
-Contributions can't be accommicated at this time.
+Contributions can't be accommodated at this time.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
 
 ## Support
 
 For issues and questions:
-- Open an issue on GitHub
-- Check the [documentation](docs/)
-- Check the local authentication endpoints under `/api/auth` for auth-related questions
+
+- Check the documentation in [docs/](docs/).
+- Check local authentication endpoints under `/api/auth`.
+- Review backend logs for authentication, database, or CORS failures.

@@ -13,9 +13,56 @@ The backend uses PostgreSQL for all environments (development, staging, producti
 
 Examples (PostgreSQL):
 
-- `DATABASE_URL=postgresql://USERNAME:PASSWORD@HOST:PORT/DBNAME`
+- Set `DATABASE_URL` to a PostgreSQL URL using your database user, password, host, port, and database name.
 
 See `.env.example` in this folder for a ready-to-copy template.
+
+## Local Authentication
+
+Authentication is handled locally by this backend. The backend owns email/password verification, password hashing, session-cookie signing, current-user lookup, logout, and backend route enforcement.
+
+Protected endpoints require a valid signed HTTP-only session cookie. The frontend obtains that cookie by posting credentials to `POST /api/auth/login` and clears it with `POST /api/auth/logout`.
+
+Local authentication endpoints:
+
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
+- `POST /api/auth/change-password`
+
+Local user-administration endpoints:
+
+- `GET /api/users/list`
+- `POST /api/users`
+- `PUT /api/users/{user_id}`
+- `POST /api/users/{user_id}/reset-password`
+
+No external identity-provider keys are required.
+
+### Authentication environment
+
+Required:
+
+- `AUTH_SECRET_KEY`: high-entropy signing secret for session cookies.
+
+Recommended:
+
+- `SESSION_COOKIE_NAME`: defaults to `clerk_session` for existing deployment continuity.
+- `SESSION_COOKIE_SECURE`: set to `true` in HTTPS production.
+- `SESSION_COOKIE_SAMESITE`: usually `lax`; review if frontend/backend are cross-site.
+- `SESSION_TTL_SECONDS`: session lifetime in seconds.
+- `CORS_ORIGINS`: must include the frontend origin because browser requests include credentials.
+
+### First local administrator
+
+After `DATABASE_URL` is configured and migrations have run, create the first active local user:
+
+```bash
+cd backend
+python scripts/create_local_user.py
+```
+
+The script lowercases the email, rejects duplicates, hashes the password, and creates an active user.
 
 ### Install dependencies
 
@@ -35,9 +82,9 @@ Note: PostgreSQL requires the driver. We use `psycopg2-binary` which is already 
   - Ensure `psql` is on your PATH
 
 #### Configure environment
-- Copy `.env.example` to `backend/.env` and set either a composite URL or individual parts:
+- Copy `.env.example` to `backend/.env` and set `DATABASE_URL`, `AUTH_SECRET_KEY`, and any needed cookie/CORS settings. Database configuration can use either a composite URL or individual parts:
   - Option A: Composite URL
-    - `DATABASE_URL=postgresql://clerk_user:clerk_password@localhost:5432/clerk_community_admin`
+    - Set `DATABASE_URL` to a PostgreSQL URL for your local database.
   - Option B: Individual parts (auto‑assembled by the app/alembic):
     - `POSTGRES_HOST=localhost`
     - `POSTGRES_PORT=5432`
@@ -92,6 +139,8 @@ Alembic resolves `DATABASE_URL` from environment or assembles from `POSTGRES_*` 
 
 Alembic reads the connection string from the `DATABASE_URL` environment variable (falls back to the `sqlalchemy.url` value in `alembic.ini` if not provided). The Alembic environment also loads variables from a local `.env` if present.
 
+After migrations complete in a fresh database, run `python scripts/create_local_user.py` to create the first local administrator.
+
 ### Running the backend locally
 
 ```
@@ -129,7 +178,7 @@ What it does:
 - Starts the frontend and waits until backend is healthy (backend healthcheck assumes `/health` endpoint)
 
 Environment used by backend in this compose file:
-- `DATABASE_URL=postgresql://clerk_user:clerk_password@db:5432/clerk_community_admin`
+- `DATABASE_URL` points to the PostgreSQL service host `db` and your configured database name.
 
 Ports:
 - Backend API: http://localhost:8000
@@ -249,7 +298,7 @@ This guarantees the backend only starts after PostgreSQL is accepting connection
 
 ## Backups and Restores (PostgreSQL and AWS RDS)
 
-For detailed procedures, see `docs/backup-restore-guide.md`.
+For detailed procedures, see `docs/backup-and-restore-guide.md`.
 
 Quick commands:
 - Local backup (auto-detects DB from `DATABASE_URL`):
