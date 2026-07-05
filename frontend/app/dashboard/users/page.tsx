@@ -1,7 +1,7 @@
 'use client';
 
 import {useState, useEffect} from 'react';
-import {Loader2, Mail, Calendar, User as UserIcon, Plus} from 'lucide-react';
+import {Loader2, Mail, Calendar, User as UserIcon, Plus, Edit2} from 'lucide-react';
 import {Modal} from '@/components/modal';
 import {Toast} from '@/components/toast';
 
@@ -24,6 +24,11 @@ interface AddUserFormData {
     displayName: string;
     password: string;
     confirmPassword: string;
+    isActive: boolean;
+}
+
+interface EditUserFormData {
+    displayName: string;
     isActive: boolean;
 }
 
@@ -59,6 +64,14 @@ export default function UsersPage() {
     const [addUserForm, setAddUserForm] = useState<AddUserFormData>(emptyAddUserForm);
     const [formError, setFormError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<LocalUser | null>(null);
+    const [editUserForm, setEditUserForm] = useState<EditUserFormData>({
+        displayName: '',
+        isActive: true,
+    });
+    const [editFormError, setEditFormError] = useState<string | null>(null);
+    const [editSubmitting, setEditSubmitting] = useState(false);
     const [toast, setToast] = useState<{
         message: string;
         type: 'success' | 'error';
@@ -100,6 +113,22 @@ export default function UsersPage() {
     const closeAddModal = () => {
         setIsAddModalOpen(false);
         setFormError(null);
+    };
+
+    const openEditModal = (user: LocalUser) => {
+        setEditingUser(user);
+        setEditUserForm({
+            displayName: user.display_name,
+            isActive: user.is_active,
+        });
+        setEditFormError(null);
+        setIsEditModalOpen(true);
+    };
+
+    const closeEditModal = () => {
+        setIsEditModalOpen(false);
+        setEditingUser(null);
+        setEditFormError(null);
     };
 
     const validateAddUserForm = () => {
@@ -159,6 +188,50 @@ export default function UsersPage() {
             setFormError(error instanceof Error ? error.message : 'Failed to create user');
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleEditUser = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setEditFormError(null);
+
+        const trimmedDisplayName = editUserForm.displayName.trim();
+        if (!trimmedDisplayName) {
+            setEditFormError('Display name is required.');
+            return;
+        }
+
+        if (!editingUser) {
+            setEditFormError('No user selected.');
+            return;
+        }
+
+        try {
+            setEditSubmitting(true);
+            const response = await fetch(`${API_BASE_URL}/api/users/${editingUser.id}`, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    display_name: trimmedDisplayName,
+                    is_active: editUserForm.isActive,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => null);
+                throw new Error(getApiErrorMessage(errorBody, 'Failed to update user'));
+            }
+
+            closeEditModal();
+            setToast({message: 'User updated successfully!', type: 'success'});
+            await loadUsers();
+        } catch (error) {
+            setEditFormError(error instanceof Error ? error.message : 'Failed to update user');
+        } finally {
+            setEditSubmitting(false);
         }
     };
 
@@ -237,6 +310,9 @@ export default function UsersPage() {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     Status
                                 </th>
+                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Actions
+                                </th>
                             </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
@@ -280,6 +356,16 @@ export default function UsersPage() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                         {user.is_active ? 'Active' : 'Inactive'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <button
+                                            type="button"
+                                            onClick={() => openEditModal(user)}
+                                            className="text-blue-600 hover:text-blue-900"
+                                            title="Edit user"
+                                        >
+                                            <Edit2 className="w-4 h-4 inline"/>
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
@@ -388,6 +474,94 @@ export default function UsersPage() {
                             disabled={submitting}
                         >
                             {submitting ? 'Creating...' : 'Create User'}
+                        </button>
+                    </div>
+                </form>
+            </Modal>
+
+            <Modal
+                isOpen={isEditModalOpen}
+                onClose={closeEditModal}
+                title="Edit User"
+            >
+                <form onSubmit={handleEditUser}>
+                    {editFormError && (
+                        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+                            {editFormError}
+                        </div>
+                    )}
+
+                    {editingUser && (
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Email
+                                </label>
+                                <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm text-gray-700">
+                                    {editingUser.email}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Last Login
+                                </label>
+                                <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm text-gray-700">
+                                    {formatDate(editingUser.last_login_at)}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Created
+                                </label>
+                                <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm text-gray-700">
+                                    {formatDate(editingUser.created_at)}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label htmlFor="edit-user-display-name" className="block text-sm font-medium text-gray-700 mb-1">
+                                    Display Name *
+                                </label>
+                                <input
+                                    type="text"
+                                    id="edit-user-display-name"
+                                    value={editUserForm.displayName}
+                                    onChange={(event) => setEditUserForm({...editUserForm, displayName: event.target.value})}
+                                    autoComplete="name"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                                    required
+                                />
+                            </div>
+
+                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                                <input
+                                    type="checkbox"
+                                    checked={editUserForm.isActive}
+                                    onChange={(event) => setEditUserForm({...editUserForm, isActive: event.target.checked})}
+                                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                Active
+                            </label>
+                        </div>
+                    )}
+
+                    <div className="mt-6 flex justify-end gap-3">
+                        <button
+                            type="button"
+                            onClick={closeEditModal}
+                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                            disabled={editSubmitting}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50"
+                            disabled={editSubmitting}
+                        >
+                            {editSubmitting ? 'Saving...' : 'Save'}
                         </button>
                     </div>
                 </form>

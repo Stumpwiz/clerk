@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -56,6 +56,21 @@ class UserCreateRequest(BaseModel):
         return value
 
 
+class UserUpdateRequest(BaseModel):
+    display_name: str
+    is_active: bool
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("display_name")
+    @classmethod
+    def validate_display_name(cls, value: str) -> str:
+        trimmed_value = value.strip()
+        if not trimmed_value:
+            raise ValueError("Display name is required")
+        return trimmed_value
+
+
 @router.get("/list", response_model=List[UserListItem])
 async def list_users(db: Session = Depends(get_db)):
     users = db.scalars(select(User).order_by(User.display_name, User.email)).all()
@@ -88,5 +103,21 @@ def create_user(request: UserCreateRequest, db: Session = Depends(get_db)):
             detail="A user with this email already exists",
         ) from exc
 
+    db.refresh(user)
+    return UserListItem.model_validate(user)
+
+
+@router.put("/{user_id}", response_model=UserListItem)
+def update_user(user_id: int, request: UserUpdateRequest, db: Session = Depends(get_db)):
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id {user_id} not found",
+        )
+
+    user.display_name = request.display_name
+    user.is_active = request.is_active
+    db.commit()
     db.refresh(user)
     return UserListItem.model_validate(user)

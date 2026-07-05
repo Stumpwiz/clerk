@@ -268,3 +268,128 @@ def test_create_user_validates_required_fields_and_authentication():
         assert invalid_email_response.status_code == 422
     finally:
         engine.dispose()
+
+
+def test_update_user_allows_display_name_and_active_only_preserving_auth_fields():
+    client, engine = _make_test_client()
+    try:
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "trusted@example.com", "password": "password123"},
+        )
+        assert login_response.status_code == 200
+
+        response = client.put(
+            "/api/users/1",
+            json={"display_name": "  Updated Trusted  ", "is_active": True},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["email"] == "trusted@example.com"
+        assert body["display_name"] == "Updated Trusted"
+        assert body["is_active"] is True
+
+        with engine.connect() as connection:
+            row = connection.exec_driver_sql(
+                "SELECT email, display_name, password_hash FROM users WHERE id = ?",
+                (1,),
+            ).one()
+
+        assert row.email == "trusted@example.com"
+        assert row.display_name == "Updated Trusted"
+        assert verify_password("password123", row.password_hash) is True
+
+        existing_login_response = client.post(
+            "/api/auth/login",
+            json={"email": "trusted@example.com", "password": "password123"},
+        )
+        assert existing_login_response.status_code == 200
+    finally:
+        engine.dispose()
+
+
+def test_update_user_rejects_blank_display_name_unknown_user_and_forbidden_fields():
+    client, engine = _make_test_client()
+    try:
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "trusted@example.com", "password": "password123"},
+        )
+        assert login_response.status_code == 200
+
+        blank_response = client.put(
+            "/api/users/1",
+            json={"display_name": "   ", "is_active": True},
+        )
+        missing_response = client.put(
+            "/api/users/999",
+            json={"display_name": "Missing User", "is_active": True},
+        )
+        forbidden_response = client.put(
+            "/api/users/1",
+            json={
+                "email": "changed@example.com",
+                "display_name": "Changed User",
+                "password": "changed-password",
+                "is_active": True,
+            },
+        )
+
+        assert blank_response.status_code == 422
+        assert missing_response.status_code == 404
+        assert forbidden_response.status_code == 422
+
+        with engine.connect() as connection:
+            row = connection.exec_driver_sql(
+                "SELECT email, display_name, password_hash FROM users WHERE id = ?",
+                (1,),
+            ).one()
+
+        assert row.email == "trusted@example.com"
+        assert row.display_name == "Trusted User"
+        assert verify_password("password123", row.password_hash) is True
+    finally:
+        engine.dispose()
+
+
+def test_update_user_active_flag_controls_login():
+    client, engine = _make_test_client()
+    try:
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "trusted@example.com", "password": "password123"},
+        )
+        assert login_response.status_code == 200
+
+        create_response = client.post(
+            "/api/users",
+            json={
+                "email": "controlled@example.com",
+                "display_name": "Controlled User",
+                "password": "controlled-password",
+                "is_active": True,
+            },
+        )
+        assert create_response.status_code == 201
+        controlled_user_id = create_response.json()["id"]
+
+        deactivate_response = client.put(
+            f"/api/users/{controlled_user_id}",
+            json={"display_name": "Controlled User", "is_active": False},
+        )
+        inactive_login_response = client.post(
+            "/api/auth/login",
+            json={"email": "controlled@example.com", "password": "controlled-password"},
+        )
+        existing_active_login_response = client.post(
+            "/api/auth/login",
+            json={"email": "trusted@example.com", "password": "password123"},
+        )
+
+        assert deactivate_response.status_code == 200
+        assert deactivate_response.json()["is_active"] is False
+        assert inactive_login_response.status_code == 403
+        assert existing_active_login_response.status_code == 200
+    finally:
+        engine.dispose()
