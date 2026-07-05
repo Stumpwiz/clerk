@@ -1,7 +1,9 @@
 'use client';
 
 import {useState, useEffect} from 'react';
-import {Loader2, Mail, Calendar, User as UserIcon} from 'lucide-react';
+import {Loader2, Mail, Calendar, User as UserIcon, Plus} from 'lucide-react';
+import {Modal} from '@/components/modal';
+import {Toast} from '@/components/toast';
 
 const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_URL ?? '';
@@ -17,10 +19,50 @@ interface LocalUser {
     updated_at: string;
 }
 
+interface AddUserFormData {
+    email: string;
+    displayName: string;
+    password: string;
+    confirmPassword: string;
+    isActive: boolean;
+}
+
+const emptyAddUserForm: AddUserFormData = {
+    email: '',
+    displayName: '',
+    password: '',
+    confirmPassword: '',
+    isActive: true,
+};
+
+function getApiErrorMessage(errorBody: unknown, fallback: string) {
+    if (
+        errorBody &&
+        typeof errorBody === 'object' &&
+        'detail' in errorBody
+    ) {
+        const detail = (errorBody as {detail: unknown}).detail;
+        if (typeof detail === 'string') return detail;
+        if (Array.isArray(detail) && detail.length > 0) {
+            const firstError = detail[0] as {msg?: unknown};
+            if (typeof firstError.msg === 'string') return firstError.msg;
+        }
+    }
+    return fallback;
+}
+
 export default function UsersPage() {
     const [users, setUsers] = useState<LocalUser[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [addUserForm, setAddUserForm] = useState<AddUserFormData>(emptyAddUserForm);
+    const [formError, setFormError] = useState<string | null>(null);
+    const [submitting, setSubmitting] = useState(false);
+    const [toast, setToast] = useState<{
+        message: string;
+        type: 'success' | 'error';
+    } | null>(null);
 
     useEffect(() => {
         loadUsers();
@@ -46,6 +88,77 @@ export default function UsersPage() {
             setError('Failed to load users. Please try again.');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const openAddModal = () => {
+        setAddUserForm(emptyAddUserForm);
+        setFormError(null);
+        setIsAddModalOpen(true);
+    };
+
+    const closeAddModal = () => {
+        setIsAddModalOpen(false);
+        setFormError(null);
+    };
+
+    const validateAddUserForm = () => {
+        const trimmedEmail = addUserForm.email.trim();
+        const trimmedDisplayName = addUserForm.displayName.trim();
+
+        if (!trimmedEmail || !trimmedDisplayName || !addUserForm.password || !addUserForm.confirmPassword) {
+            return 'Email, display name, password, and confirm password are required.';
+        }
+
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+            return 'Enter a valid email address.';
+        }
+
+        if (addUserForm.password !== addUserForm.confirmPassword) {
+            return 'Passwords do not match.';
+        }
+
+        return null;
+    };
+
+    const handleAddUser = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setFormError(null);
+
+        const validationError = validateAddUserForm();
+        if (validationError) {
+            setFormError(validationError);
+            return;
+        }
+
+        try {
+            setSubmitting(true);
+            const response = await fetch(`${API_BASE_URL}/api/users`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email: addUserForm.email.trim(),
+                    display_name: addUserForm.displayName.trim(),
+                    password: addUserForm.password,
+                    is_active: addUserForm.isActive,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => null);
+                throw new Error(getApiErrorMessage(errorBody, 'Failed to create user'));
+            }
+
+            closeAddModal();
+            setToast({message: 'User created successfully!', type: 'success'});
+            await loadUsers();
+        } catch (error) {
+            setFormError(error instanceof Error ? error.message : 'Failed to create user');
+        } finally {
+            setSubmitting(false);
         }
     };
 
@@ -77,6 +190,14 @@ export default function UsersPage() {
                         View local application users
                     </p>
                 </div>
+                <button
+                    type="button"
+                    onClick={openAddModal}
+                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                    <Plus className="w-4 h-4 mr-2"/>
+                    Add User
+                </button>
             </div>
 
             {error && (
@@ -167,6 +288,118 @@ export default function UsersPage() {
                     </div>
                 )}
             </div>
+
+            <Modal
+                isOpen={isAddModalOpen}
+                onClose={closeAddModal}
+                title="Add User"
+            >
+                <form onSubmit={handleAddUser}>
+                    {formError && (
+                        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+                            {formError}
+                        </div>
+                    )}
+
+                    <div className="space-y-4">
+                        <div>
+                            <label htmlFor="add-user-email" className="block text-sm font-medium text-gray-700 mb-1">
+                                Email *
+                            </label>
+                            <input
+                                type="email"
+                                id="add-user-email"
+                                value={addUserForm.email}
+                                onChange={(event) => setAddUserForm({...addUserForm, email: event.target.value})}
+                                autoComplete="email"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="add-user-display-name" className="block text-sm font-medium text-gray-700 mb-1">
+                                Display Name *
+                            </label>
+                            <input
+                                type="text"
+                                id="add-user-display-name"
+                                value={addUserForm.displayName}
+                                onChange={(event) => setAddUserForm({...addUserForm, displayName: event.target.value})}
+                                autoComplete="name"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="add-user-password" className="block text-sm font-medium text-gray-700 mb-1">
+                                Password *
+                            </label>
+                            <input
+                                type="password"
+                                id="add-user-password"
+                                value={addUserForm.password}
+                                onChange={(event) => setAddUserForm({...addUserForm, password: event.target.value})}
+                                autoComplete="new-password"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="add-user-confirm-password" className="block text-sm font-medium text-gray-700 mb-1">
+                                Confirm Password *
+                            </label>
+                            <input
+                                type="password"
+                                id="add-user-confirm-password"
+                                value={addUserForm.confirmPassword}
+                                onChange={(event) => setAddUserForm({...addUserForm, confirmPassword: event.target.value})}
+                                autoComplete="new-password"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                                required
+                            />
+                        </div>
+
+                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                            <input
+                                type="checkbox"
+                                checked={addUserForm.isActive}
+                                onChange={(event) => setAddUserForm({...addUserForm, isActive: event.target.checked})}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            Active
+                        </label>
+                    </div>
+
+                    <div className="mt-6 flex justify-end gap-3">
+                        <button
+                            type="button"
+                            onClick={closeAddModal}
+                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                            disabled={submitting}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50"
+                            disabled={submitting}
+                        >
+                            {submitting ? 'Creating...' : 'Create User'}
+                        </button>
+                    </div>
+                </form>
+            </Modal>
+
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
+            )}
         </div>
     );
 }

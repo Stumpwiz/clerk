@@ -16,6 +16,7 @@ from app.auth.passwords import hash_password, verify_password
 from app.database import Base, get_db
 from app.models import User
 from app.routers.auth import router as auth_router
+from app.routers.users import router as users_router
 
 
 def test_password_hashing_round_trip():
@@ -70,6 +71,7 @@ def _make_test_client():
 
     app = FastAPI()
     app.include_router(auth_router)
+    app.include_router(users_router)
 
     def override_get_db():
         with SessionLocal() as session:
@@ -137,5 +139,132 @@ def test_logout_clears_cookie_and_me_requires_authentication():
         assert logout_response.json() == {"success": True}
         assert "clerk_session=" in logout_response.headers["set-cookie"]
         assert client.get("/api/auth/me").status_code == 401
+    finally:
+        engine.dispose()
+
+
+def test_create_user_normalizes_email_and_stores_password_hash():
+    client, engine = _make_test_client()
+    try:
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "trusted@example.com", "password": "password123"},
+        )
+        assert login_response.status_code == 200
+
+        response = client.post(
+            "/api/users",
+            json={
+                "email": "NEW.USER@example.com",
+                "display_name": "  New User  ",
+                "password": "created-password",
+                "is_active": True,
+            },
+        )
+
+        assert response.status_code == 201
+        body = response.json()
+        assert body["email"] == "new.user@example.com"
+        assert body["display_name"] == "New User"
+        assert "password" not in body
+        assert "password_hash" not in body
+
+        with engine.connect() as connection:
+            row = connection.exec_driver_sql(
+                "SELECT email, display_name, password_hash, is_active FROM users WHERE email = ?",
+                ("new.user@example.com",),
+            ).one()
+
+        assert row.email == "new.user@example.com"
+        assert row.display_name == "New User"
+        assert row.password_hash != "created-password"
+        assert verify_password("created-password", row.password_hash) is True
+        assert bool(row.is_active) is True
+
+        new_login_response = client.post(
+            "/api/auth/login",
+            json={"email": "new.user@example.com", "password": "created-password"},
+        )
+        assert new_login_response.status_code == 200
+    finally:
+        engine.dispose()
+
+
+def test_create_user_rejects_duplicate_email_case_insensitively():
+    client, engine = _make_test_client()
+    try:
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "trusted@example.com", "password": "password123"},
+        )
+        assert login_response.status_code == 200
+
+        response = client.post(
+            "/api/users",
+            json={
+                "email": "TRUSTED@example.com",
+                "display_name": "Duplicate User",
+                "password": "password123",
+                "is_active": True,
+            },
+        )
+
+        assert response.status_code == 409
+        assert response.json()["detail"] == "A user with this email already exists"
+    finally:
+        engine.dispose()
+
+
+def test_create_user_validates_required_fields_and_authentication():
+    client, engine = _make_test_client()
+    try:
+        unauthenticated_response = client.post(
+            "/api/users",
+            json={
+                "email": "created@example.com",
+                "display_name": "Created User",
+                "password": "password123",
+                "is_active": True,
+            },
+        )
+        assert unauthenticated_response.status_code == 401
+
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "trusted@example.com", "password": "password123"},
+        )
+        assert login_response.status_code == 200
+
+        missing_display_name_response = client.post(
+            "/api/users",
+            json={
+                "email": "created@example.com",
+                "display_name": "   ",
+                "password": "password123",
+                "is_active": True,
+            },
+        )
+        missing_password_response = client.post(
+            "/api/users",
+            json={
+                "email": "created@example.com",
+                "display_name": "Created User",
+                "password": "",
+                "is_active": True,
+            },
+        )
+        invalid_email_response = client.post(
+            "/api/users",
+            json={
+                "email": "not-an-email",
+                "display_name": "Created User",
+                "password": "password123",
+                "is_active": True,
+            },
+        )
+
+        assert missing_display_name_response.status_code == 422
+        assert missing_password_response.status_code == 422
+        assert invalid_email_response.status_code == 422
     finally:
         engine.dispose()
