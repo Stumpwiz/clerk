@@ -1,9 +1,9 @@
 #!/bin/bash
-# start-docker.sh - Helper script to start the Clerk application with Docker
+# start-docker.sh - Helper script to start the community administration application with Docker
 
 set -e
 
-echo "🚀 Starting Clerk Application..."
+echo "🚀 Starting Community Administration Application..."
 echo ""
 
 # Check if oldEnv file exists
@@ -13,8 +13,7 @@ if [ ! -f oldEnv ]; then
     echo "Please create a .env file from .env.docker.example:"
     echo "  cp .env.docker.example .env"
     echo ""
-    echo "Then edit .env and add your Clerk credentials from:"
-    echo "  https://dashboard.clerk.com"
+    echo "Then edit .env and add the required database and authentication settings."
     echo ""
     exit 1
 fi

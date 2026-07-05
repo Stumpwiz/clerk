@@ -10,7 +10,7 @@ usage() {
 Usage: $0 --snapshot-id <snapshot-id> --new-db-instance-id <new-id> \
           [--db-instance-class db.t4g.micro] [--db-subnet-group <name>] \
           [--vpc-security-group-ids sg-abc,sg-def] [--publicly-accessible true|false] \
-          [--tag Key=Project,Value=Clerk]... [--region us-east-1]
+          [--tag Key=Project,Value=CommunityAdmin]... [--region us-east-1]
 
 Notes:
   - This creates a NEW DB instance from the specified snapshot.

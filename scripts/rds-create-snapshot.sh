@@ -7,7 +7,7 @@ AWS_REGION=${AWS_REGION:-us-east-1}
 
 usage() {
   cat <<USAGE
-Usage: $0 --db-instance-id <identifier> [--snapshot-id <id>] [--tag Key=Project,Value=Clerk]... [--region us-east-1]
+Usage: $0 --db-instance-id <identifier> [--snapshot-id <id>] [--tag Key=Project,Value=CommunityAdmin]... [--region us-east-1]
 
 Examples:
   $0 --db-instance-id clerk-rds-pg

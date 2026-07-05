@@ -1,4 +1,4 @@
-# Backend Dockerfile for Clerk application
+# Backend Dockerfile for the community administration application
 FROM python:3.13-slim
 
 # Set working directory

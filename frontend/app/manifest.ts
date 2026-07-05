@@ -3,7 +3,7 @@ import { MetadataRoute } from 'next'
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'Retirement Community Admin',
-    short_name: 'Clerk Admin',
+    short_name: 'Admin',
     description: 'Administrative system for retirement community management',
     start_url: '/',
     display: 'standalone',

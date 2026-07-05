@@ -1,9 +1,8 @@
 import type {Metadata} from "next";
-import {ClerkProvider} from "@clerk/nextjs";
 import "./globals.css";
 import type {ReactNode} from "react";
 
-// Force dynamic rendering - required for Clerk authentication
+// Force dynamic rendering for authenticated application pages.
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
@@ -24,12 +23,10 @@ export default function RootLayout({
   children: ReactNode;
 }>) {
     return (
-        <ClerkProvider>
-            <html lang="en">
-            <body>
-            {children}
-            </body>
-            </html>
-        </ClerkProvider>
+        <html lang="en">
+        <body>
+        {children}
+        </body>
+        </html>
     );
 }

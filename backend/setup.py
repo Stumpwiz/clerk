@@ -1,16 +1,16 @@
 """
-setup.py - Installation configuration for clerk backend models
+setup.py - Installation configuration for community administration backend models
 
-This allows the clerk models to be installed as a package and shared
+This allows the backend models to be installed as a package and shared
 with other projects (e.g., scribe).
 """
 
 from setuptools import setup, find_packages
 
 setup(
-    name="clerk-backend",
+    name="community-admin-backend",
     version="0.1.0",
-    description="Clerk backend models and database utilities",
+    description="Community administration backend models and database utilities",
     author="George Wright",
     packages=find_packages(),
     install_requires=[

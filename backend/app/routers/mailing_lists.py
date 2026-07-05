@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.auth.dependencies import require_authenticated_user
 from app.config import settings
 from app.database import get_db
 from app.utils.mailing_lists import (
@@ -17,7 +18,11 @@ from app.utils.mailing_lists import (
 )
 from app.utils.pdf_generator import PDFGenerator
 
-router = APIRouter(prefix="/api/mailing-lists", tags=["mailing-lists"])
+router = APIRouter(
+    prefix="/api/mailing-lists",
+    tags=["mailing-lists"],
+    dependencies=[Depends(require_authenticated_user)],
+)
 
 pdf_generator = PDFGenerator(settings.roster_reports_dir)
 

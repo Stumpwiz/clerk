@@ -1,4 +1,4 @@
-# Clerk - Community Administration System
+# Community Administration System
 
 A modern web application for managing retirement community administrative bodies, offices, terms, and generating official documents.
 
@@ -15,7 +15,7 @@ A modern web application for managing retirement community administrative bodies
   - Vacancies Report
   - Expiring Terms Report
   - Hall Reps Email List
-- **User Management**: Clerk-based authentication with invitation system
+- **User Management**: Local authenticated application users
 
 ## Tech Stack
 
@@ -23,7 +23,6 @@ A modern web application for managing retirement community administrative bodies
 - **Next.js 15** - React framework
 - **TypeScript** - Type-safe JavaScript
 - **Tailwind CSS** - Utility-first CSS
-- **Clerk** - Authentication and user management
 - **Lucide React** - Icon library
 
 ### Backend
@@ -34,7 +33,6 @@ A modern web application for managing retirement community administrative bodies
 - **psycopg2** - PostgreSQL adapter for Python
 - **Jinja2** - Template engine for LaTeX documents
 - **XeLaTeX** - PDF generation engine
-- **Clerk API** - User management integration
 
 ## Prerequisites
 
@@ -42,7 +40,6 @@ A modern web application for managing retirement community administrative bodies
   - OR -
 - **Node.js 20+** and **Python 3.13+**
 - **PostgreSQL 18.1+** (required for all environments)
-- **Clerk Account** - Sign up at [clerk.com](https://clerk.com)
 
 > **Note**: If you have native PostgreSQL installed, configure it for **Manual** startup to avoid port conflicts with Docker PostgreSQL. See [Development Workflow](#development-workflow) below.
 
@@ -71,7 +68,7 @@ This ensures Docker PostgreSQL can use port 5432 without conflicts.
 
    Wait for the startup message:
    ```
-   *** Clerk started ***
+   *** Community Admin started ***
    Database: postgresql://clerk_user:***@db:5432/clerk_community_admin
    API Docs: http://0.0.0.0:8000/docs
    ```
@@ -127,9 +124,7 @@ cd clerk-community-admin
 # Copy the example file
 cp backend/.env.example backend/.env
 
-# Edit backend/.env and add your Clerk credentials:
-# CLERK_SECRET_KEY=sk_test_...
-# CLERK_PUBLISHABLE_KEY=pk_test_...
+# Edit backend/.env and set DATABASE_URL and AUTH_SECRET_KEY.
 ```
 
 ### 3. Start with Docker Compose
@@ -152,7 +147,7 @@ Services will be available at:
 ### 4. Access the Application
 
 1. Open http://localhost:3000 in your browser
-2. Sign up with Clerk authentication
+2. Sign in with a local application account
 3. Start managing your community data!
 
 ## Quick Start (Local Development)
@@ -200,9 +195,9 @@ cd frontend
 # Install dependencies
 npm install
 
-# Create .env.local with your Clerk keys
+# Create .env.local with frontend settings
 cp .env.local.example .env.local
-# Edit .env.local and add your credentials
+# Edit .env.local if you need to override the API URL
 
 # Start the frontend
 npm run dev
@@ -220,7 +215,7 @@ npm run dev
 - **Frontend**: AWS App Runner (containerized Next.js)
 - **Backend**: AWS App Runner (containerized FastAPI)
 - **Database**: AWS RDS PostgreSQL (Multi-AZ optional)
-- **Authentication**: Clerk (managed service)
+- **Authentication**: Local FastAPI session cookies
 - **File Storage**: Container volumes (letters & reports)
 
 ## Documentation
@@ -277,4 +272,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 For issues and questions:
 - Open an issue on GitHub
 - Check the [documentation](docs/)
-- Review [Clerk documentation](https://clerk.com/docs) for auth-related questions
+- Check the local authentication endpoints under `/api/auth` for auth-related questions

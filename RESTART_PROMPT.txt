@@ -1,4 +1,4 @@
-Continuation of the Clerk project deployment/stabilization work. This handoff reflects successful completion of the Mailing Lists enhancement phase.
+Continuation of the community administration deployment/stabilization work. This handoff reflects successful completion of the Mailing Lists enhancement phase.
 
 ---
 
@@ -29,7 +29,7 @@ Application user
 - `clerk_user`
 
 SQLAlchemy URL pattern
-- `postgresql://clerk_user:<password>@clerk-db.c4agslv7s5zu.us-east-1.rds.amazonaws.com:5432/<dbname>`
+- `postgresql://<db_user>:<password>@<db-host>:5432/<dbname>`
 
 Important
 - `DATABASE_URL` is the single source of truth.
@@ -174,7 +174,7 @@ TESTING / VALIDATION
 
 END STATE
 
-The Clerk system is now:
+The community administration system is now:
 - registry-driven
 - API-discoverable
 - frontend-synchronized

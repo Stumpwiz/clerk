@@ -44,7 +44,9 @@ export default function ReportsPage() {
     const loadReportsRegistry = async () => {
         try {
             setLoadingRegistry(true);
-            const response = await fetch(`${API_BASE_URL}/api/reports`);
+            const response = await fetch(`${API_BASE_URL}/api/reports`, {
+                credentials: 'include',
+            });
 
             if (!response.ok) {
                 throw new Error('Failed to fetch reports registry');
@@ -79,7 +81,9 @@ export default function ReportsPage() {
             setError(null);
 
             // Fetch list of available PDFs from the backend with cache busting
-            const response = await fetch(`${API_BASE_URL}/api/reports/pdfs?_=${Date.now()}`);
+            const response = await fetch(`${API_BASE_URL}/api/reports/pdfs?_=${Date.now()}`, {
+                credentials: 'include',
+            });
 
             if (!response.ok) {
                 throw new Error('Failed to fetch PDF list');
@@ -107,7 +111,9 @@ export default function ReportsPage() {
         setError(null);
 
         try {
-            const response = await fetch(`${API_BASE_URL}${report.endpoint}`);
+            const response = await fetch(`${API_BASE_URL}${report.endpoint}`, {
+                credentials: 'include',
+            });
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -131,7 +137,7 @@ export default function ReportsPage() {
         }
     };
 
-    const handleViewPdf = () => {
+    const handleViewPdf = async () => {
         if (!selectedPdf) {
             alert('Please select a report to view.');
             return;
@@ -139,9 +145,24 @@ export default function ReportsPage() {
 
         const pdfFile = pdfFiles.find(f => f.filename === selectedPdf);
         if (pdfFile) {
-            // Add fresh cache-busting timestamp when opening
-            const freshUrl = `${API_BASE_URL}/api/reports/pdfs/${selectedPdf}?_=${Date.now()}`;
-            window.open(freshUrl, '_blank');
+            try {
+                // Add fresh cache-busting timestamp when loading
+                const freshUrl = `${API_BASE_URL}/api/reports/pdfs/${selectedPdf}?_=${Date.now()}`;
+                const response = await fetch(freshUrl, {
+                    credentials: 'include',
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                window.open(url, '_blank', 'noopener,noreferrer');
+                setTimeout(() => URL.revokeObjectURL(url), 60_000);
+            } catch (error) {
+                console.error(`Error viewing ${selectedPdf}:`, error);
+                setError(`Failed to view ${selectedPdf}: ${error}`);
+            }
         }
     };
 

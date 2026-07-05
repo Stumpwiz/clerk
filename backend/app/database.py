@@ -47,7 +47,7 @@ def init_db():
     Note: For production, use Alembic migrations instead.
     """
     # Import all models to ensure they're registered with Base
-    from app.models import Body, Person, Office, Term, ReportRecord, LetterTemplate
+    from app.models import Body, Person, Office, Term, ReportRecord, LetterTemplate, User
 
     # Create all tables
     Base.metadata.create_all(bind=engine)

@@ -4,11 +4,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 
+from app.auth.dependencies import require_authenticated_user
 from app.database import get_db
 from app.models import Body
 from app.schemas.body import BodyCreate, BodyUpdate, BodyResponse
 
-router = APIRouter(prefix="/api/bodies", tags=["Bodies"])
+router = APIRouter(
+    prefix="/api/bodies",
+    tags=["Bodies"],
+    dependencies=[Depends(require_authenticated_user)],
+)
 
 
 @router.get("", response_model=List[BodyResponse])

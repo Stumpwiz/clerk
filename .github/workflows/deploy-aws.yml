@@ -2,7 +2,7 @@ name: Deploy to AWS App Runner
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ master ]
     paths:
       - 'backend/**'
       - 'frontend/**'
@@ -26,7 +26,7 @@ env:
   BACKEND_SERVICE_ARN: arn:aws:apprunner:us-east-1:365591166807:service/clerk-backend/181518238ff148e88363a488640dd90d
   FRONTEND_SERVICE_ARN: arn:aws:apprunner:us-east-1:365591166807:service/clerk-frontend/7d7f42151edb48fb87d706a4cceb2e4a
   # Production API URL for frontend builds
-  NEXT_PUBLIC_API_BASE_URL: https://api.mrrc.online
+  NEXT_PUBLIC_API_URL: https://api.mrrc.online
 
 jobs:
   detect-changes:
@@ -206,8 +206,7 @@ jobs:
         run: |
           echo "Building frontend image with production configuration..."
           docker build \
-            --build-arg NEXT_PUBLIC_API_BASE_URL=${{ env.NEXT_PUBLIC_API_BASE_URL }} \
-            --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${{ secrets.CLERK_PUBLISHABLE_KEY }} \
+            --build-arg NEXT_PUBLIC_API_URL=${{ env.NEXT_PUBLIC_API_URL }} \
             -t $ECR_REGISTRY/$ECR_FRONTEND_REPOSITORY:$IMAGE_TAG \
             ./frontend
 

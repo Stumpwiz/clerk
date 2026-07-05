@@ -38,8 +38,22 @@ def test_alembic_migration_creates_tables(migrated_postgres: str):
     try:
         insp = inspect(eng)
         tables = set(insp.get_table_names(schema="public"))
-        for t in ("body", "office", "person", "term", "letters"):
+        for t in ("body", "office", "person", "term", "letters", "users"):
             assert t in tables, f"Missing table: {t}"
+        user_columns = {column["name"] for column in insp.get_columns("users", schema="public")}
+        assert {
+            "id",
+            "email",
+            "password_hash",
+            "display_name",
+            "avatar_path",
+            "is_active",
+            "last_login_at",
+            "created_at",
+            "updated_at",
+        }.issubset(user_columns)
+        assert "clerk_user_id" not in user_columns
+        assert "profile_image_url" not in user_columns
         # Check the view exists using inspector first, then fallback query
         try:
             view_names = set(insp.get_view_names(schema="public"))

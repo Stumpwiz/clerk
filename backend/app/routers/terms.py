@@ -4,11 +4,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 
+from app.auth.dependencies import require_authenticated_user
 from app.database import get_db
 from app.models import Term
 from app.schemas.term import TermCreate, TermUpdate, TermResponse
 
-router = APIRouter(prefix="/api/terms", tags=["Terms"])
+router = APIRouter(
+    prefix="/api/terms",
+    tags=["Terms"],
+    dependencies=[Depends(require_authenticated_user)],
+)
 
 
 @router.get("", response_model=List[TermResponse])

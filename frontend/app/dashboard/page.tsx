@@ -53,7 +53,7 @@ const cards = [
     },
   {
     title: "Users",
-    description: "Manage users and send invitations",
+    description: "View local application users",
     href: "/dashboard/users",
     icon: UsersRound,
     color: "bg-teal-500",
@@ -73,7 +73,7 @@ export default function DashboardPage() {
             <div className="mb-8">
                 <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
                 <p className="mt-2 text-gray-600">
-                Welcome to Clerk - Community Administration System
+                Welcome to the Community Administration System
                 </p>
             </div>
 

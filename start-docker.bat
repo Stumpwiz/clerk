@@ -1,7 +1,7 @@
 @echo off
-REM start-docker.bat - Helper script to start the Clerk application with Docker (Windows)
+REM start-docker.bat - Helper script to start the community administration application with Docker (Windows)
 
-echo 🚀 Starting Clerk Application...
+echo 🚀 Starting Community Administration Application...
 echo.
 
 REM Check if .env file exists
@@ -11,8 +11,7 @@ if not exist .env (
     echo Please create a .env file from .env.docker.example:
     echo   copy .env.docker.example .env
     echo.
-    echo Then edit .env and add your Clerk credentials from:
-    echo   https://dashboard.clerk.com
+    echo Then edit .env and add the required database and authentication settings.
     echo.
     exit /b 1
 )

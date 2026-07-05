@@ -1,13 +1,12 @@
-"""Add users table for Clerk-managed identities
+"""Add users table for externally managed identities
 
 Revision ID: 3f2a7c1a9b10
 Revises: b18e8b9c2a01
 Create Date: 2025-11-18
 
 This migration introduces an application `users` table intended to store
-selected fields synchronized from Clerk.com. It does not replace Clerk as the
-source of truth; rather, it allows the application to reference and display
-user information while using Clerk for authentication and invitations.
+selected fields synchronized from the previous external identity provider. It
+did not replace that provider as the source of truth at the time.
 """
 
 from alembic import op

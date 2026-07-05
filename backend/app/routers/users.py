@@ -1,152 +1,149 @@
-# app/routers/users.py - User management via Clerk API
+# app/routers/users.py - Local user management
 
-from fastapi import APIRouter, HTTPException
-from typing import List, Dict
-from pydantic import BaseModel, EmailStr
-import hashlib
+from datetime import datetime
+from typing import List
 
-from app.utils.clerk_client import clerk_client
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
-router = APIRouter(prefix="/api/users", tags=["users"])
+from app.auth.dependencies import require_authenticated_user
+from app.auth.passwords import hash_password
+from app.database import get_db
+from app.models import User
 
-
-def get_gravatar_url(email: str, size: int = 200) -> str:
-    """
-    Generate gravatar URL from email address
-
-    Args:
-        email: User's email address
-        size: Image size in pixels (default 200)
-
-    Returns:
-        Gravatar URL
-    """
-    # Gravatar requires lowercase, trimmed email
-    email_hash = hashlib.md5(email.lower().strip().encode('utf-8')).hexdigest()
-    return f"https://www.gravatar.com/avatar/{email_hash}?s={size}&d=mp"
+router = APIRouter(
+    prefix="/api/users",
+    tags=["users"],
+    dependencies=[Depends(require_authenticated_user)],
+)
 
 
-class InvitationRequest(BaseModel):
+class UserListItem(BaseModel):
+    id: int
     email: EmailStr
-    redirect_url: str = None
+    display_name: str
+    avatar_path: str | None = None
+    is_active: bool
+    last_login_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
-class InvitationResponse(BaseModel):
-    success: bool
-    message: str
-    invitation: Dict = None
+class UserCreateRequest(BaseModel):
+    email: EmailStr
+    display_name: str
+    password: str
+    is_active: bool = True
+
+    @field_validator("display_name")
+    @classmethod
+    def validate_display_name(cls, value: str) -> str:
+        trimmed_value = value.strip()
+        if not trimmed_value:
+            raise ValueError("Display name is required")
+        return trimmed_value
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        if not value:
+            raise ValueError("Password is required")
+        return value
 
 
-@router.get("/list", response_model=List[Dict])
-async def list_users():
-    """
-    Get all users from Clerk
+class UserUpdateRequest(BaseModel):
+    display_name: str
+    is_active: bool
 
-    Returns a list of users with their basic information
-    """
-    try:
-        users = clerk_client.list_users(limit=500)
+    model_config = ConfigDict(extra="forbid")
 
-        # Transform to a simpler format for the frontend
-        simplified_users = []
-        for user in users:
-            email = user.get("email_addresses", [{}])[0].get("email_address", "")
-
-            simplified_users.append({
-                "id": user.get("id"),
-                "email": email,
-                "first_name": user.get("first_name", ""),
-                "last_name": user.get("last_name", ""),
-                "created_at": user.get("created_at"),
-                "updated_at": user.get("updated_at"),
-                "last_sign_in_at": user.get("last_sign_in_at"),
-                "profile_image_url": get_gravatar_url(email) if email else "",
-            })
-
-        return simplified_users
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    @field_validator("display_name")
+    @classmethod
+    def validate_display_name(cls, value: str) -> str:
+        trimmed_value = value.strip()
+        if not trimmed_value:
+            raise ValueError("Display name is required")
+        return trimmed_value
 
 
-@router.post("/invite", response_model=InvitationResponse)
-async def invite_user(request: InvitationRequest):
-    """
-    Send an invitation email to a new user via Clerk
+class UserPasswordResetRequest(BaseModel):
+    new_password: str
 
-    Args:
-        request: Contains email address and optional redirect URL
+    model_config = ConfigDict(extra="forbid")
 
-    Returns:
-        Success status and invitation details
-    """
-    try:
-        invitation = clerk_client.create_invitation(
-            email_address=request.email,
-            redirect_url=request.redirect_url
-        )
 
-        return InvitationResponse(
-            success=True,
-            message=f"Invitation sent successfully to {request.email}",
-            invitation=invitation
-        )
+@router.get("/list", response_model=List[UserListItem])
+async def list_users(db: Session = Depends(get_db)):
+    users = db.scalars(select(User).order_by(User.display_name, User.email)).all()
+    return [UserListItem.model_validate(user) for user in users]
 
-    except Exception as e:
+
+@router.post("", response_model=UserListItem, status_code=status.HTTP_201_CREATED)
+def create_user(request: UserCreateRequest, db: Session = Depends(get_db)):
+    normalized_email = request.email.lower()
+    existing_user = db.scalar(select(User).where(func.lower(User.email) == normalized_email))
+    if existing_user is not None:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to send invitation: {str(e)}"
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A user with this email already exists",
         )
 
-
-@router.get("/invitations", response_model=List[Dict])
-async def list_invitations(status: str = None):
-    """
-    Get all pending invitations from Clerk
-
-    Args:
-        status: Optional filter by status (pending, accepted, revoked)
-
-    Returns:
-        List of invitations
-    """
+    user = User(
+        email=normalized_email,
+        display_name=request.display_name,
+        password_hash=hash_password(request.password),
+        is_active=request.is_active,
+    )
+    db.add(user)
     try:
-        invitations = clerk_client.list_invitations(status=status)
-
-        # Transform to simpler format
-        simplified_invitations = []
-        for inv in invitations:
-            simplified_invitations.append({
-                "id": inv.get("id"),
-                "email": inv.get("email_address"),
-                "status": inv.get("status"),
-                "created_at": inv.get("created_at"),
-                "updated_at": inv.get("updated_at"),
-            })
-
-        return simplified_invitations
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/invitations/{invitation_id}/revoke")
-async def revoke_invitation(invitation_id: str):
-    """
-    Revoke a pending invitation
-
-    Args:
-        invitation_id: Clerk invitation ID
-
-    Returns:
-        Success status
-    """
-    try:
-        clerk_client.revoke_invitation(invitation_id)
-        return {"success": True, "message": "Invitation revoked successfully"}
-
-    except Exception as e:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to revoke invitation: {str(e)}"
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A user with this email already exists",
+        ) from exc
+
+    db.refresh(user)
+    return UserListItem.model_validate(user)
+
+
+@router.put("/{user_id}", response_model=UserListItem)
+def update_user(user_id: int, request: UserUpdateRequest, db: Session = Depends(get_db)):
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id {user_id} not found",
         )
+
+    user.display_name = request.display_name
+    user.is_active = request.is_active
+    db.commit()
+    db.refresh(user)
+    return UserListItem.model_validate(user)
+
+
+@router.post("/{user_id}/reset-password")
+def reset_user_password(user_id: int, request: UserPasswordResetRequest, db: Session = Depends(get_db)):
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id {user_id} not found",
+        )
+
+    if len(request.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 8 characters",
+        )
+
+    user.password_hash = hash_password(request.new_password)
+    db.commit()
+    return {"success": True}

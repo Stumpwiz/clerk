@@ -2,7 +2,7 @@ import type {NextConfig} from "next";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ||
     (process.env.NODE_ENV === 'production'
-        ? (process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.mrrc.online')
+        ? 'https://api.mrrc.online'
         : '');
 
 const nextConfig: NextConfig = {
@@ -15,10 +15,6 @@ const nextConfig: NextConfig = {
     // Explicitly set environment variables for the build
     env: {
         NEXT_PUBLIC_API_URL: API_URL,
-        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y3V0ZS1tb25rZXktMjUuY2xlcmsuYWNjb3VudHMuZGV2JA',
-        NEXT_PUBLIC_CLERK_SIGN_IN_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL || '/sign-in',
-        NEXT_PUBLIC_CLERK_SIGN_UP_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL || '/sign-up',
-        NEXT_PUBLIC_CLERK_FALLBACK_REDIRECT_URL: process.env.NEXT_PUBLIC_CLERK_FALLBACK_REDIRECT_URL || '/dashboard',
     },
 
     // Configure API proxy for development

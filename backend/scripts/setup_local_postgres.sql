@@ -1,4 +1,4 @@
--- PostgreSQL initialization script for Clerk application
+-- PostgreSQL initialization script for the community administration application
 -- This script is idempotent and can be run multiple times safely.
 --
 -- When used with Docker's /docker-entrypoint-initdb.d/, the database and user

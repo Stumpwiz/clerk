@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Clerk Secret-Scanning Guardrail
+# Secret-scanning guardrail
 # This hook scans staged changes for secrets using gitleaks.
 
 if ! command -v gitleaks &> /dev/null

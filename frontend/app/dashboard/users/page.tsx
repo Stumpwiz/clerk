@@ -1,30 +1,94 @@
 'use client';
 
 import {useState, useEffect} from 'react';
-import {Loader2, UserPlus, Mail, Calendar, User as UserIcon} from 'lucide-react';
+import {Loader2, Mail, Calendar, User as UserIcon, Plus, Edit2, KeyRound} from 'lucide-react';
+import {Modal} from '@/components/modal';
+import {Toast} from '@/components/toast';
 
 const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_URL ?? '';
 
-interface ClerkUser {
-    id: string;
+interface LocalUser {
+    id: number;
     email: string;
-    first_name: string;
-    last_name: string;
-    created_at: number;
-    updated_at: number;
-    last_sign_in_at: number;
-    profile_image_url: string;
+    display_name: string;
+    avatar_path: string | null;
+    is_active: boolean;
+    last_login_at: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+interface AddUserFormData {
+    email: string;
+    displayName: string;
+    password: string;
+    confirmPassword: string;
+    isActive: boolean;
+}
+
+interface EditUserFormData {
+    displayName: string;
+    isActive: boolean;
+}
+
+interface ResetPasswordFormData {
+    newPassword: string;
+    confirmPassword: string;
+}
+
+const emptyAddUserForm: AddUserFormData = {
+    email: '',
+    displayName: '',
+    password: '',
+    confirmPassword: '',
+    isActive: true,
+};
+
+function getApiErrorMessage(errorBody: unknown, fallback: string) {
+    if (
+        errorBody &&
+        typeof errorBody === 'object' &&
+        'detail' in errorBody
+    ) {
+        const detail = (errorBody as {detail: unknown}).detail;
+        if (typeof detail === 'string') return detail;
+        if (Array.isArray(detail) && detail.length > 0) {
+            const firstError = detail[0] as {msg?: unknown};
+            if (typeof firstError.msg === 'string') return firstError.msg;
+        }
+    }
+    return fallback;
 }
 
 export default function UsersPage() {
-    const [users, setUsers] = useState<ClerkUser[]>([]);
+    const [users, setUsers] = useState<LocalUser[]>([]);
     const [loading, setLoading] = useState(true);
-    const [showInviteModal, setShowInviteModal] = useState(false);
-    const [inviteEmail, setInviteEmail] = useState('');
-    const [inviting, setInviting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [addUserForm, setAddUserForm] = useState<AddUserFormData>(emptyAddUserForm);
+    const [formError, setFormError] = useState<string | null>(null);
+    const [submitting, setSubmitting] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<LocalUser | null>(null);
+    const [editUserForm, setEditUserForm] = useState<EditUserFormData>({
+        displayName: '',
+        isActive: true,
+    });
+    const [editFormError, setEditFormError] = useState<string | null>(null);
+    const [editSubmitting, setEditSubmitting] = useState(false);
+    const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+    const [resetUser, setResetUser] = useState<LocalUser | null>(null);
+    const [resetPasswordForm, setResetPasswordForm] = useState<ResetPasswordFormData>({
+        newPassword: '',
+        confirmPassword: '',
+    });
+    const [resetFormError, setResetFormError] = useState<string | null>(null);
+    const [resetSubmitting, setResetSubmitting] = useState(false);
+    const [toast, setToast] = useState<{
+        message: string;
+        type: 'success' | 'error';
+    } | null>(null);
 
     useEffect(() => {
         loadUsers();
@@ -35,7 +99,9 @@ export default function UsersPage() {
             setLoading(true);
             setError(null);
 
-            const response = await fetch(`${API_BASE_URL}/api/users/list`);
+            const response = await fetch(`${API_BASE_URL}/api/users/list`, {
+                credentials: 'include',
+            });
 
             if (!response.ok) {
                 throw new Error('Failed to fetch users');
@@ -51,67 +117,211 @@ export default function UsersPage() {
         }
     };
 
-    const handleInviteUser = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const openAddModal = () => {
+        setAddUserForm(emptyAddUserForm);
+        setFormError(null);
+        setIsAddModalOpen(true);
+    };
 
-        if (!inviteEmail || !inviteEmail.includes('@')) {
-            setError('Please enter a valid email address');
+    const closeAddModal = () => {
+        setIsAddModalOpen(false);
+        setFormError(null);
+    };
+
+    const openEditModal = (user: LocalUser) => {
+        setEditingUser(user);
+        setEditUserForm({
+            displayName: user.display_name,
+            isActive: user.is_active,
+        });
+        setEditFormError(null);
+        setIsEditModalOpen(true);
+    };
+
+    const closeEditModal = () => {
+        setIsEditModalOpen(false);
+        setEditingUser(null);
+        setEditFormError(null);
+    };
+
+    const openResetModal = (user: LocalUser) => {
+        setResetUser(user);
+        setResetPasswordForm({
+            newPassword: '',
+            confirmPassword: '',
+        });
+        setResetFormError(null);
+        setIsResetModalOpen(true);
+    };
+
+    const closeResetModal = () => {
+        setIsResetModalOpen(false);
+        setResetUser(null);
+        setResetPasswordForm({
+            newPassword: '',
+            confirmPassword: '',
+        });
+        setResetFormError(null);
+    };
+
+    const validateAddUserForm = () => {
+        const trimmedEmail = addUserForm.email.trim();
+        const trimmedDisplayName = addUserForm.displayName.trim();
+
+        if (!trimmedEmail || !trimmedDisplayName || !addUserForm.password || !addUserForm.confirmPassword) {
+            return 'Email, display name, password, and confirm password are required.';
+        }
+
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+            return 'Enter a valid email address.';
+        }
+
+        if (addUserForm.password !== addUserForm.confirmPassword) {
+            return 'Passwords do not match.';
+        }
+
+        return null;
+    };
+
+    const handleAddUser = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setFormError(null);
+
+        const validationError = validateAddUserForm();
+        if (validationError) {
+            setFormError(validationError);
             return;
         }
 
-        setInviting(true);
-        setError(null);
-        setSuccessMessage(null);
-
         try {
-            const response = await fetch(`${API_BASE_URL}/api/users/invite`, {
+            setSubmitting(true);
+            const response = await fetch(`${API_BASE_URL}/api/users`, {
                 method: 'POST',
+                credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    email: inviteEmail,
-                    redirect_url: `${window.location.origin}/sign-up`
+                    email: addUserForm.email.trim(),
+                    display_name: addUserForm.displayName.trim(),
+                    password: addUserForm.password,
+                    is_active: addUserForm.isActive,
                 }),
             });
 
             if (!response.ok) {
-                let errorMessage = `Failed to send invitation (HTTP ${response.status})`;
-                try {
-                    const errorData = await response.json();
-                    if (errorData.detail) {
-                        errorMessage = errorData.detail;
-                    }
-                } catch (e) {
-                    // If we can't parse JSON, use the generic message
-                    errorMessage = `Failed to send invitation: ${response.statusText}`;
-                }
-                throw new Error(errorMessage);
+                const errorBody = await response.json().catch(() => null);
+                throw new Error(getApiErrorMessage(errorBody, 'Failed to create user'));
             }
 
-            await response.json();
-
-            setSuccessMessage(`Invitation sent successfully to ${inviteEmail}!`);
-            setInviteEmail('');
-            setShowInviteModal(false);
-
-            // Refresh user list after a short delay
-            setTimeout(() => {
-                loadUsers();
-            }, 1000);
-
+            closeAddModal();
+            setToast({message: 'User created successfully!', type: 'success'});
+            await loadUsers();
         } catch (error) {
-            console.error('Error inviting user:', error);
-            const errorMsg = error instanceof Error ? error.message : 'Failed to send invitation';
-            setError(errorMsg);
+            setFormError(error instanceof Error ? error.message : 'Failed to create user');
         } finally {
-            setInviting(false);
+            setSubmitting(false);
         }
     };
 
-    const formatDate = (timestamp: number) => {
+    const handleEditUser = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setEditFormError(null);
+
+        const trimmedDisplayName = editUserForm.displayName.trim();
+        if (!trimmedDisplayName) {
+            setEditFormError('Display name is required.');
+            return;
+        }
+
+        if (!editingUser) {
+            setEditFormError('No user selected.');
+            return;
+        }
+
+        try {
+            setEditSubmitting(true);
+            const response = await fetch(`${API_BASE_URL}/api/users/${editingUser.id}`, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    display_name: trimmedDisplayName,
+                    is_active: editUserForm.isActive,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => null);
+                throw new Error(getApiErrorMessage(errorBody, 'Failed to update user'));
+            }
+
+            closeEditModal();
+            setToast({message: 'User updated successfully!', type: 'success'});
+            await loadUsers();
+        } catch (error) {
+            setEditFormError(error instanceof Error ? error.message : 'Failed to update user');
+        } finally {
+            setEditSubmitting(false);
+        }
+    };
+
+    const handleResetPassword = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setResetFormError(null);
+
+        if (!resetUser) {
+            setResetFormError('No user selected.');
+            return;
+        }
+
+        if (!resetPasswordForm.newPassword || !resetPasswordForm.confirmPassword) {
+            setResetFormError('New password and confirm password are required.');
+            return;
+        }
+
+        if (resetPasswordForm.newPassword.length < 8) {
+            setResetFormError('New password must be at least 8 characters.');
+            return;
+        }
+
+        if (resetPasswordForm.newPassword !== resetPasswordForm.confirmPassword) {
+            setResetFormError('Passwords do not match.');
+            return;
+        }
+
+        try {
+            setResetSubmitting(true);
+            const response = await fetch(`${API_BASE_URL}/api/users/${resetUser.id}/reset-password`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    new_password: resetPasswordForm.newPassword,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => null);
+                throw new Error(getApiErrorMessage(errorBody, 'Failed to reset password'));
+            }
+
+            closeResetModal();
+            setToast({message: 'Password reset successfully!', type: 'success'});
+        } catch (error) {
+            setResetFormError(error instanceof Error ? error.message : 'Failed to reset password');
+        } finally {
+            setResetSubmitting(false);
+        }
+    };
+
+    const formatDate = (timestamp: string | null) => {
         if (!timestamp) return 'Never';
-        return new Date(timestamp).toLocaleDateString('en-US', {
+        return new Date(timestamp).toLocaleString('en-US', {
             year: 'numeric',
             month: 'short',
             day: 'numeric',
@@ -134,27 +344,22 @@ export default function UsersPage() {
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
                     <p className="mt-2 text-sm text-gray-600">
-                        Manage users and send invitations via Clerk
+                        View local application users
                     </p>
                 </div>
                 <button
-                    onClick={() => setShowInviteModal(true)}
+                    type="button"
+                    onClick={openAddModal}
                     className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                    <UserPlus className="h-5 w-5 mr-2"/>
-                    Invite New User
+                    <Plus className="w-4 h-4 mr-2"/>
+                    Add User
                 </button>
             </div>
 
             {error && (
                 <div className="bg-red-50 border border-red-200 rounded-md p-4">
                     <p className="text-sm text-red-700">{error}</p>
-                </div>
-            )}
-
-            {successMessage && (
-                <div className="bg-green-50 border border-green-200 rounded-md p-4">
-                    <p className="text-sm text-green-700">{successMessage}</p>
                 </div>
             )}
 
@@ -167,7 +372,7 @@ export default function UsersPage() {
 
                 {users.length === 0 ? (
                     <div className="p-6 text-center text-gray-500">
-                        No users found. Invite users to get started.
+                        No users found.
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -184,7 +389,13 @@ export default function UsersPage() {
                                     Joined
                                 </th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Last Sign In
+                                    Last Login
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Status
+                                </th>
+                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                    Actions
                                 </th>
                             </tr>
                             </thead>
@@ -193,10 +404,10 @@ export default function UsersPage() {
                                 <tr key={user.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
-                                            {user.profile_image_url ? (
+                                            {user.avatar_path ? (
                                                 <img
-                                                    src={user.profile_image_url}
-                                                    alt={`${user.first_name} ${user.last_name}`}
+                                                    src={user.avatar_path}
+                                                    alt=""
                                                     className="h-10 w-10 rounded-full"
                                                 />
                                             ) : (
@@ -207,7 +418,7 @@ export default function UsersPage() {
                                             )}
                                             <div className="ml-4">
                                                 <div className="text-sm font-medium text-gray-900">
-                                                    {user.first_name} {user.last_name}
+                                                    {user.display_name}
                                                 </div>
                                             </div>
                                         </div>
@@ -225,7 +436,30 @@ export default function UsersPage() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {formatDate(user.last_sign_in_at)}
+                                        {formatDate(user.last_login_at)}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {user.is_active ? 'Active' : 'Inactive'}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                        <div className="inline-flex items-center gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => openEditModal(user)}
+                                                className="text-blue-600 hover:text-blue-900"
+                                                title="Edit user"
+                                            >
+                                                <Edit2 className="w-4 h-4 inline"/>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => openResetModal(user)}
+                                                className="text-blue-600 hover:text-blue-900"
+                                                title="Reset password"
+                                            >
+                                                <KeyRound className="w-4 h-4 inline"/>
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -235,67 +469,279 @@ export default function UsersPage() {
                 )}
             </div>
 
-            {/* Invite User Modal */}
-            {showInviteModal && (
-                <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-                        <div className="px-6 py-4 border-b border-gray-200">
-                            <h3 className="text-lg font-medium text-gray-900">Invite New User</h3>
+            <Modal
+                isOpen={isAddModalOpen}
+                onClose={closeAddModal}
+                title="Add User"
+            >
+                <form onSubmit={handleAddUser}>
+                    {formError && (
+                        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+                            {formError}
                         </div>
-                        <form onSubmit={handleInviteUser}>
-                            <div className="p-6">
-                                <p className="text-sm text-gray-600 mb-4">
-                                    Send an invitation email to a new user. They will receive a link to create their
-                                    account.
-                                </p>
-                                <div>
-                                    <label htmlFor="invite_email" className="block text-sm font-medium text-gray-700">
-                                        Email Address
-                                    </label>
-                                    <input
-                                        type="email"
-                                        id="invite_email"
-                                        value={inviteEmail}
-                                        onChange={(e) => setInviteEmail(e.target.value)}
-                                        placeholder="user@example.com"
-                                        required
-                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm text-gray-900"
-                                    />
+                    )}
+
+                    <div className="space-y-4">
+                        <div>
+                            <label htmlFor="add-user-email" className="block text-sm font-medium text-gray-700 mb-1">
+                                Email *
+                            </label>
+                            <input
+                                type="email"
+                                id="add-user-email"
+                                value={addUserForm.email}
+                                onChange={(event) => setAddUserForm({...addUserForm, email: event.target.value})}
+                                autoComplete="email"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="add-user-display-name" className="block text-sm font-medium text-gray-700 mb-1">
+                                Display Name *
+                            </label>
+                            <input
+                                type="text"
+                                id="add-user-display-name"
+                                value={addUserForm.displayName}
+                                onChange={(event) => setAddUserForm({...addUserForm, displayName: event.target.value})}
+                                autoComplete="name"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="add-user-password" className="block text-sm font-medium text-gray-700 mb-1">
+                                Password *
+                            </label>
+                            <input
+                                type="password"
+                                id="add-user-password"
+                                value={addUserForm.password}
+                                onChange={(event) => setAddUserForm({...addUserForm, password: event.target.value})}
+                                autoComplete="new-password"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="add-user-confirm-password" className="block text-sm font-medium text-gray-700 mb-1">
+                                Confirm Password *
+                            </label>
+                            <input
+                                type="password"
+                                id="add-user-confirm-password"
+                                value={addUserForm.confirmPassword}
+                                onChange={(event) => setAddUserForm({...addUserForm, confirmPassword: event.target.value})}
+                                autoComplete="new-password"
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                                required
+                            />
+                        </div>
+
+                        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                            <input
+                                type="checkbox"
+                                checked={addUserForm.isActive}
+                                onChange={(event) => setAddUserForm({...addUserForm, isActive: event.target.checked})}
+                                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            Active
+                        </label>
+                    </div>
+
+                    <div className="mt-6 flex justify-end gap-3">
+                        <button
+                            type="button"
+                            onClick={closeAddModal}
+                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                            disabled={submitting}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50"
+                            disabled={submitting}
+                        >
+                            {submitting ? 'Creating...' : 'Create User'}
+                        </button>
+                    </div>
+                </form>
+            </Modal>
+
+            <Modal
+                isOpen={isEditModalOpen}
+                onClose={closeEditModal}
+                title="Edit User"
+            >
+                <form onSubmit={handleEditUser}>
+                    {editFormError && (
+                        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+                            {editFormError}
+                        </div>
+                    )}
+
+                    {editingUser && (
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Email
+                                </label>
+                                <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm text-gray-700">
+                                    {editingUser.email}
                                 </div>
                             </div>
-                            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowInviteModal(false);
-                                        setInviteEmail('');
-                                        setError(null);
-                                    }}
-                                    className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={inviting}
-                                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                                >
-                                    {inviting ? (
-                                        <>
-                                            <Loader2 className="animate-spin h-4 w-4 mr-2"/>
-                                            Sending...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Mail className="h-4 w-4 mr-2"/>
-                                            Send Invitation
-                                        </>
-                                    )}
-                                </button>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Last Login
+                                </label>
+                                <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm text-gray-700">
+                                    {formatDate(editingUser.last_login_at)}
+                                </div>
                             </div>
-                        </form>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Created
+                                </label>
+                                <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm text-gray-700">
+                                    {formatDate(editingUser.created_at)}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label htmlFor="edit-user-display-name" className="block text-sm font-medium text-gray-700 mb-1">
+                                    Display Name *
+                                </label>
+                                <input
+                                    type="text"
+                                    id="edit-user-display-name"
+                                    value={editUserForm.displayName}
+                                    onChange={(event) => setEditUserForm({...editUserForm, displayName: event.target.value})}
+                                    autoComplete="name"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                                    required
+                                />
+                            </div>
+
+                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                                <input
+                                    type="checkbox"
+                                    checked={editUserForm.isActive}
+                                    onChange={(event) => setEditUserForm({...editUserForm, isActive: event.target.checked})}
+                                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                Active
+                            </label>
+                        </div>
+                    )}
+
+                    <div className="mt-6 flex justify-end gap-3">
+                        <button
+                            type="button"
+                            onClick={closeEditModal}
+                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                            disabled={editSubmitting}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50"
+                            disabled={editSubmitting}
+                        >
+                            {editSubmitting ? 'Saving...' : 'Save'}
+                        </button>
                     </div>
-                </div>
+                </form>
+            </Modal>
+
+            <Modal
+                isOpen={isResetModalOpen}
+                onClose={closeResetModal}
+                title="Reset Password"
+            >
+                <form onSubmit={handleResetPassword}>
+                    {resetFormError && (
+                        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+                            {resetFormError}
+                        </div>
+                    )}
+
+                    {resetUser && (
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    User
+                                </label>
+                                <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm text-gray-700">
+                                    {resetUser.display_name} ({resetUser.email})
+                                </div>
+                            </div>
+
+                            <div>
+                                <label htmlFor="reset-user-password" className="block text-sm font-medium text-gray-700 mb-1">
+                                    New Password *
+                                </label>
+                                <input
+                                    type="password"
+                                    id="reset-user-password"
+                                    value={resetPasswordForm.newPassword}
+                                    onChange={(event) => setResetPasswordForm({...resetPasswordForm, newPassword: event.target.value})}
+                                    autoComplete="new-password"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label htmlFor="reset-user-confirm-password" className="block text-sm font-medium text-gray-700 mb-1">
+                                    Confirm Password *
+                                </label>
+                                <input
+                                    type="password"
+                                    id="reset-user-confirm-password"
+                                    value={resetPasswordForm.confirmPassword}
+                                    onChange={(event) => setResetPasswordForm({...resetPasswordForm, confirmPassword: event.target.value})}
+                                    autoComplete="new-password"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                                    required
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="mt-6 flex justify-end gap-3">
+                        <button
+                            type="button"
+                            onClick={closeResetModal}
+                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                            disabled={resetSubmitting}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50"
+                            disabled={resetSubmitting}
+                        >
+                            {resetSubmitting ? 'Resetting...' : 'Reset Password'}
+                        </button>
+                    </div>
+                </form>
+            </Modal>
+
+            {toast && (
+                <Toast
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => setToast(null)}
+                />
             )}
         </div>
     );

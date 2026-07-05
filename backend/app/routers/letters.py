@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
+from app.auth.dependencies import require_authenticated_user
 from app.database import get_db
 from app.models import LetterTemplate, ReportRecord
 from app.schemas.letter import (
@@ -30,7 +31,11 @@ STATIC_IMAGES_DIR = BASE_DIR / "static" / "images"
 FILES_LETTERS_DIR.mkdir(parents=True, exist_ok=True)
 STATIC_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
-router = APIRouter(prefix="/api/letters", tags=["Letters"])
+router = APIRouter(
+    prefix="/api/letters",
+    tags=["Letters"],
+    dependencies=[Depends(require_authenticated_user)],
+)
 
 
 def escape_latex(text: str) -> str:
