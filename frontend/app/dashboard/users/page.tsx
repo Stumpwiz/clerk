@@ -1,7 +1,7 @@
 'use client';
 
 import {useState, useEffect} from 'react';
-import {Loader2, Mail, Calendar, User as UserIcon, Plus, Edit2} from 'lucide-react';
+import {Loader2, Mail, Calendar, User as UserIcon, Plus, Edit2, KeyRound} from 'lucide-react';
 import {Modal} from '@/components/modal';
 import {Toast} from '@/components/toast';
 
@@ -30,6 +30,11 @@ interface AddUserFormData {
 interface EditUserFormData {
     displayName: string;
     isActive: boolean;
+}
+
+interface ResetPasswordFormData {
+    newPassword: string;
+    confirmPassword: string;
 }
 
 const emptyAddUserForm: AddUserFormData = {
@@ -72,6 +77,14 @@ export default function UsersPage() {
     });
     const [editFormError, setEditFormError] = useState<string | null>(null);
     const [editSubmitting, setEditSubmitting] = useState(false);
+    const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+    const [resetUser, setResetUser] = useState<LocalUser | null>(null);
+    const [resetPasswordForm, setResetPasswordForm] = useState<ResetPasswordFormData>({
+        newPassword: '',
+        confirmPassword: '',
+    });
+    const [resetFormError, setResetFormError] = useState<string | null>(null);
+    const [resetSubmitting, setResetSubmitting] = useState(false);
     const [toast, setToast] = useState<{
         message: string;
         type: 'success' | 'error';
@@ -129,6 +142,26 @@ export default function UsersPage() {
         setIsEditModalOpen(false);
         setEditingUser(null);
         setEditFormError(null);
+    };
+
+    const openResetModal = (user: LocalUser) => {
+        setResetUser(user);
+        setResetPasswordForm({
+            newPassword: '',
+            confirmPassword: '',
+        });
+        setResetFormError(null);
+        setIsResetModalOpen(true);
+    };
+
+    const closeResetModal = () => {
+        setIsResetModalOpen(false);
+        setResetUser(null);
+        setResetPasswordForm({
+            newPassword: '',
+            confirmPassword: '',
+        });
+        setResetFormError(null);
     };
 
     const validateAddUserForm = () => {
@@ -232,6 +265,57 @@ export default function UsersPage() {
             setEditFormError(error instanceof Error ? error.message : 'Failed to update user');
         } finally {
             setEditSubmitting(false);
+        }
+    };
+
+    const handleResetPassword = async (event: React.FormEvent<HTMLFormElement>) => {
+        event.preventDefault();
+        setResetFormError(null);
+
+        if (!resetUser) {
+            setResetFormError('No user selected.');
+            return;
+        }
+
+        if (!resetPasswordForm.newPassword || !resetPasswordForm.confirmPassword) {
+            setResetFormError('New password and confirm password are required.');
+            return;
+        }
+
+        if (resetPasswordForm.newPassword.length < 8) {
+            setResetFormError('New password must be at least 8 characters.');
+            return;
+        }
+
+        if (resetPasswordForm.newPassword !== resetPasswordForm.confirmPassword) {
+            setResetFormError('Passwords do not match.');
+            return;
+        }
+
+        try {
+            setResetSubmitting(true);
+            const response = await fetch(`${API_BASE_URL}/api/users/${resetUser.id}/reset-password`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    new_password: resetPasswordForm.newPassword,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => null);
+                throw new Error(getApiErrorMessage(errorBody, 'Failed to reset password'));
+            }
+
+            closeResetModal();
+            setToast({message: 'Password reset successfully!', type: 'success'});
+        } catch (error) {
+            setResetFormError(error instanceof Error ? error.message : 'Failed to reset password');
+        } finally {
+            setResetSubmitting(false);
         }
     };
 
@@ -358,14 +442,24 @@ export default function UsersPage() {
                                         {user.is_active ? 'Active' : 'Inactive'}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                        <button
-                                            type="button"
-                                            onClick={() => openEditModal(user)}
-                                            className="text-blue-600 hover:text-blue-900"
-                                            title="Edit user"
-                                        >
-                                            <Edit2 className="w-4 h-4 inline"/>
-                                        </button>
+                                        <div className="inline-flex items-center gap-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => openEditModal(user)}
+                                                className="text-blue-600 hover:text-blue-900"
+                                                title="Edit user"
+                                            >
+                                                <Edit2 className="w-4 h-4 inline"/>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => openResetModal(user)}
+                                                className="text-blue-600 hover:text-blue-900"
+                                                title="Reset password"
+                                            >
+                                                <KeyRound className="w-4 h-4 inline"/>
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -562,6 +656,81 @@ export default function UsersPage() {
                             disabled={editSubmitting}
                         >
                             {editSubmitting ? 'Saving...' : 'Save'}
+                        </button>
+                    </div>
+                </form>
+            </Modal>
+
+            <Modal
+                isOpen={isResetModalOpen}
+                onClose={closeResetModal}
+                title="Reset Password"
+            >
+                <form onSubmit={handleResetPassword}>
+                    {resetFormError && (
+                        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+                            {resetFormError}
+                        </div>
+                    )}
+
+                    {resetUser && (
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    User
+                                </label>
+                                <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm text-gray-700">
+                                    {resetUser.display_name} ({resetUser.email})
+                                </div>
+                            </div>
+
+                            <div>
+                                <label htmlFor="reset-user-password" className="block text-sm font-medium text-gray-700 mb-1">
+                                    New Password *
+                                </label>
+                                <input
+                                    type="password"
+                                    id="reset-user-password"
+                                    value={resetPasswordForm.newPassword}
+                                    onChange={(event) => setResetPasswordForm({...resetPasswordForm, newPassword: event.target.value})}
+                                    autoComplete="new-password"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label htmlFor="reset-user-confirm-password" className="block text-sm font-medium text-gray-700 mb-1">
+                                    Confirm Password *
+                                </label>
+                                <input
+                                    type="password"
+                                    id="reset-user-confirm-password"
+                                    value={resetPasswordForm.confirmPassword}
+                                    onChange={(event) => setResetPasswordForm({...resetPasswordForm, confirmPassword: event.target.value})}
+                                    autoComplete="new-password"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                                    required
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="mt-6 flex justify-end gap-3">
+                        <button
+                            type="button"
+                            onClick={closeResetModal}
+                            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                            disabled={resetSubmitting}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50"
+                            disabled={resetSubmitting}
+                        >
+                            {resetSubmitting ? 'Resetting...' : 'Reset Password'}
                         </button>
                     </div>
                 </form>

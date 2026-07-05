@@ -71,6 +71,12 @@ class UserUpdateRequest(BaseModel):
         return trimmed_value
 
 
+class UserPasswordResetRequest(BaseModel):
+    new_password: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
 @router.get("/list", response_model=List[UserListItem])
 async def list_users(db: Session = Depends(get_db)):
     users = db.scalars(select(User).order_by(User.display_name, User.email)).all()
@@ -121,3 +127,23 @@ def update_user(user_id: int, request: UserUpdateRequest, db: Session = Depends(
     db.commit()
     db.refresh(user)
     return UserListItem.model_validate(user)
+
+
+@router.post("/{user_id}/reset-password")
+def reset_user_password(user_id: int, request: UserPasswordResetRequest, db: Session = Depends(get_db)):
+    user = db.get(User, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"User with id {user_id} not found",
+        )
+
+    if len(request.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 8 characters",
+        )
+
+    user.password_hash = hash_password(request.new_password)
+    db.commit()
+    return {"success": True}

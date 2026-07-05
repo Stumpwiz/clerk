@@ -143,6 +143,124 @@ def test_logout_clears_cookie_and_me_requires_authentication():
         engine.dispose()
 
 
+def test_change_password_updates_hash_preserves_session_and_new_login_works():
+    client, engine = _make_test_client()
+    try:
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "trusted@example.com", "password": "password123"},
+        )
+        assert login_response.status_code == 200
+
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "password123",
+                "new_password": "new-password",
+                "confirm_password": "new-password",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"success": True}
+        assert client.get("/api/auth/me").status_code == 200
+
+        with engine.connect() as connection:
+            row = connection.exec_driver_sql(
+                "SELECT password_hash FROM users WHERE email = ?",
+                ("trusted@example.com",),
+            ).one()
+
+        assert row.password_hash != "new-password"
+        assert verify_password("new-password", row.password_hash) is True
+        assert verify_password("password123", row.password_hash) is False
+
+        client.post("/api/auth/logout")
+        old_password_response = client.post(
+            "/api/auth/login",
+            json={"email": "trusted@example.com", "password": "password123"},
+        )
+        new_password_response = client.post(
+            "/api/auth/login",
+            json={"email": "trusted@example.com", "password": "new-password"},
+        )
+
+        assert old_password_response.status_code == 401
+        assert new_password_response.status_code == 200
+    finally:
+        engine.dispose()
+
+
+def test_change_password_rejects_invalid_requests():
+    client, engine = _make_test_client()
+    try:
+        unauthenticated_response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "password123",
+                "new_password": "new-password",
+                "confirm_password": "new-password",
+            },
+        )
+        assert unauthenticated_response.status_code == 401
+
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "trusted@example.com", "password": "password123"},
+        )
+        assert login_response.status_code == 200
+
+        incorrect_current_response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "wrong-password",
+                "new_password": "new-password",
+                "confirm_password": "new-password",
+            },
+        )
+        short_password_response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "password123",
+                "new_password": "short",
+                "confirm_password": "short",
+            },
+        )
+        mismatch_response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "password123",
+                "new_password": "new-password",
+                "confirm_password": "different-password",
+            },
+        )
+        same_password_response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "password123",
+                "new_password": "password123",
+                "confirm_password": "password123",
+            },
+        )
+
+        assert incorrect_current_response.status_code == 400
+        assert incorrect_current_response.json()["detail"] == "Current password is incorrect"
+        assert short_password_response.status_code == 400
+        assert short_password_response.json()["detail"] == "New password must be at least 8 characters"
+        assert mismatch_response.status_code == 400
+        assert mismatch_response.json()["detail"] == "New password and confirmation do not match"
+        assert same_password_response.status_code == 400
+        assert same_password_response.json()["detail"] == "New password must be different from the current password"
+
+        still_old_password_response = client.post(
+            "/api/auth/login",
+            json={"email": "trusted@example.com", "password": "password123"},
+        )
+        assert still_old_password_response.status_code == 200
+    finally:
+        engine.dispose()
+
+
 def test_create_user_normalizes_email_and_stores_password_hash():
     client, engine = _make_test_client()
     try:
@@ -391,5 +509,106 @@ def test_update_user_active_flag_controls_login():
         assert deactivate_response.json()["is_active"] is False
         assert inactive_login_response.status_code == 403
         assert existing_active_login_response.status_code == 200
+    finally:
+        engine.dispose()
+
+
+def test_reset_user_password_updates_hash_and_new_login_works():
+    client, engine = _make_test_client()
+    try:
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "trusted@example.com", "password": "password123"},
+        )
+        assert login_response.status_code == 200
+
+        create_response = client.post(
+            "/api/users",
+            json={
+                "email": "reset-target@example.com",
+                "display_name": "Reset Target",
+                "password": "old-password",
+                "is_active": True,
+            },
+        )
+        assert create_response.status_code == 201
+        target_user_id = create_response.json()["id"]
+
+        response = client.post(
+            f"/api/users/{target_user_id}/reset-password",
+            json={"new_password": "new-password"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {"success": True}
+
+        with engine.connect() as connection:
+            row = connection.exec_driver_sql(
+                "SELECT password_hash FROM users WHERE email = ?",
+                ("reset-target@example.com",),
+            ).one()
+
+        assert row.password_hash != "new-password"
+        assert verify_password("new-password", row.password_hash) is True
+        assert verify_password("old-password", row.password_hash) is False
+
+        client.post("/api/auth/logout")
+        old_password_response = client.post(
+            "/api/auth/login",
+            json={"email": "reset-target@example.com", "password": "old-password"},
+        )
+        new_password_response = client.post(
+            "/api/auth/login",
+            json={"email": "reset-target@example.com", "password": "new-password"},
+        )
+
+        assert old_password_response.status_code == 401
+        assert new_password_response.status_code == 200
+    finally:
+        engine.dispose()
+
+
+def test_reset_user_password_rejects_invalid_requests():
+    client, engine = _make_test_client()
+    try:
+        unauthenticated_response = client.post(
+            "/api/users/1/reset-password",
+            json={"new_password": "new-password"},
+        )
+        assert unauthenticated_response.status_code == 401
+
+        login_response = client.post(
+            "/api/auth/login",
+            json={"email": "trusted@example.com", "password": "password123"},
+        )
+        assert login_response.status_code == 200
+
+        with engine.connect() as connection:
+            original_hash = connection.exec_driver_sql(
+                "SELECT password_hash FROM users WHERE id = ?",
+                (1,),
+            ).one().password_hash
+
+        missing_response = client.post(
+            "/api/users/999/reset-password",
+            json={"new_password": "new-password"},
+        )
+        short_password_response = client.post(
+            "/api/users/1/reset-password",
+            json={"new_password": "short"},
+        )
+
+        assert missing_response.status_code == 404
+        assert short_password_response.status_code == 400
+        assert short_password_response.json()["detail"] == "New password must be at least 8 characters"
+
+        with engine.connect() as connection:
+            unchanged_hash = connection.exec_driver_sql(
+                "SELECT password_hash FROM users WHERE id = ?",
+                (1,),
+            ).one().password_hash
+
+        assert unchanged_hash == original_hash
+        assert verify_password("password123", unchanged_hash) is True
     finally:
         engine.dispose()

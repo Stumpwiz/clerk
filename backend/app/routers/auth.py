@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.cookies import clear_session_cookie, set_session_cookie
 from app.auth.dependencies import require_authenticated_user
-from app.auth.passwords import verify_password
+from app.auth.passwords import hash_password, verify_password
 from app.database import get_db
 from app.models import User
 
@@ -39,6 +39,16 @@ class LoginResponse(BaseModel):
 
 
 class LogoutResponse(BaseModel):
+    success: bool
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: str
+
+
+class ChangePasswordResponse(BaseModel):
     success: bool
 
 
@@ -74,3 +84,41 @@ def logout(response: Response):
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(require_authenticated_user)):
     return UserResponse.model_validate(current_user)
+
+
+@router.post("/change-password", response_model=ChangePasswordResponse)
+def change_password(
+    request: ChangePasswordRequest,
+    current_user: User = Depends(require_authenticated_user),
+    db: Session = Depends(get_db),
+):
+    if not request.current_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is required",
+        )
+    if len(request.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 8 characters",
+        )
+    if request.new_password != request.confirm_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password and confirmation do not match",
+        )
+    if not verify_password(request.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+    if verify_password(request.new_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from the current password",
+        )
+
+    current_user.password_hash = hash_password(request.new_password)
+    db.add(current_user)
+    db.commit()
+    return ChangePasswordResponse(success=True)
