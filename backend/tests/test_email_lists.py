@@ -11,6 +11,7 @@ from app.utils.mailing_lists import (
     get_committee_chairs_emails,
     get_committee_secretaries_emails,
     get_hall_reps_emails,
+    get_rc_officers_emails,
 )
 
 
@@ -24,7 +25,7 @@ def _use_docker_postgres_for_tests(postgres_test_db):
     yield
 
 
-def test_committee_secretaries_include_current_secretary_terms_across_bodies(pg_session):
+def test_committee_secretaries_include_current_committee_terms_and_exclude_rc(pg_session):
     # Use "unlikely" IDs to avoid collisions
     rc_body = Body(body_id=9001, name="Residents Council", body_precedence=1.0)
     committee_body = Body(body_id=9002, name="Landscape Committee", body_precedence=2.0)
@@ -76,8 +77,73 @@ def test_committee_secretaries_include_current_secretary_terms_across_bodies(pg_
     emails = get_committee_secretaries_emails(pg_session)
 
     assert "committee.secretary@example.org" in emails
-    assert "rc.secretary@example.org" in emails
+    assert "rc.secretary@example.org" not in emails
     assert "inactive.secretary@example.org" not in emails
+
+
+def test_rc_officers_include_all_current_rc_terms_and_exclude_expired(pg_session):
+    rc_body = Body(body_id=9051, name="Residents Council", body_precedence=1.0)
+    committee_body = Body(body_id=9052, name="Civic Committee", body_precedence=2.0)
+    pg_session.add_all([rc_body, committee_body])
+    pg_session.flush()
+
+    president_office = Office(title="President", office_precedence=1.0, office_body_id=rc_body.body_id)
+    staff_office = Office(title="Staff", office_precedence=2.0, office_body_id=rc_body.body_id)
+    wing_office = Office(title="East Wing Representative", office_precedence=3.0, office_body_id=rc_body.body_id)
+    committee_office = Office(title="Member", office_precedence=1.0, office_body_id=committee_body.body_id)
+    pg_session.add_all([president_office, staff_office, wing_office, committee_office])
+    pg_session.flush()
+
+    current_officer = Person(first="Current", last="Officer", email="current.officer@example.org")
+    current_staff = Person(first="Current", last="Staff", email="current.staff@example.org")
+    current_wing_rep = Person(first="Current", last="Wing", email="current.wing@example.org")
+    expired_officer = Person(first="Former", last="Officer", email="former.officer@example.org")
+    committee_member = Person(first="Committee", last="Member", email="committee.member@example.org")
+    pg_session.add_all([current_officer, current_staff, current_wing_rep, expired_officer, committee_member])
+    pg_session.flush()
+
+    today = date.today()
+    pg_session.add_all([
+        Term(
+            term_person_id=current_officer.person_id,
+            term_office_id=president_office.office_id,
+            start=today - timedelta(days=30),
+            end=today + timedelta(days=30),
+        ),
+        Term(
+            term_person_id=current_staff.person_id,
+            term_office_id=staff_office.office_id,
+            start=today - timedelta(days=30),
+            end=None,
+        ),
+        Term(
+            term_person_id=current_wing_rep.person_id,
+            term_office_id=wing_office.office_id,
+            start=today,
+            end=today,
+        ),
+        Term(
+            term_person_id=expired_officer.person_id,
+            term_office_id=president_office.office_id,
+            start=today - timedelta(days=120),
+            end=today - timedelta(days=1),
+        ),
+        Term(
+            term_person_id=committee_member.person_id,
+            term_office_id=committee_office.office_id,
+            start=today - timedelta(days=30),
+            end=today + timedelta(days=30),
+        ),
+    ])
+    pg_session.commit()
+
+    emails = get_rc_officers_emails(pg_session)
+
+    assert "current.officer@example.org" in emails
+    assert "current.staff@example.org" in emails
+    assert "current.wing@example.org" in emails
+    assert "former.officer@example.org" not in emails
+    assert "committee.member@example.org" not in emails
 
 
 def test_hall_reps_includes_only_active_with_email_and_dedupes(pg_session):
@@ -225,7 +291,7 @@ def test_committee_chairs_only_current_chair_terms(pg_session):
 
     emails = get_committee_chairs_emails(pg_session)
 
-    assert "rc.chair@example.org" in emails
+    assert "rc.chair@example.org" not in emails
     assert "committee.chair@example.org" in emails
     assert "old.chair@example.org" not in emails
     assert "member.only@example.org" not in emails

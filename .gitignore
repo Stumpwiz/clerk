@@ -7,7 +7,6 @@ backend/files_roster_reports/*.pdf
 backend/.env
 backend/files_roster_reports/*.txt
 .context/
-docs/
 ionos_roster_secret.json
 secret-read-policy.json
 

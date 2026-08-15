@@ -105,13 +105,18 @@ def query_term_emails(
 
 
 def get_rc_officers_emails(db: Session) -> List[str]:
-    return query_term_emails(db, body_name="Residents Council")
+    return query_term_emails(
+        db,
+        body_name="Residents Council",
+        current_only=True,
+    )
 
 
 def get_committee_chairs_emails(db: Session) -> List[str]:
     return query_term_emails(
         db,
         office_title="Chair",
+        exclude_body_name="Residents Council",
         current_only=True,
     )
 
@@ -120,6 +125,7 @@ def get_committee_secretaries_emails(db: Session) -> List[str]:
     return query_term_emails(
         db,
         office_title="Secretary",
+        exclude_body_name="Residents Council",
         current_only=True,
     )
 
