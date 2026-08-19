@@ -1,6 +1,7 @@
 # app/routers/persons.py - CRUD operations for Person resources
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -14,6 +15,17 @@ router = APIRouter(
     tags=["Persons"],
     dependencies=[Depends(require_authenticated_user)],
 )
+
+PERSON_NAME_UNIQUE_CONSTRAINT = "uix_person_first_last"
+
+
+def _is_duplicate_person_error(exc: IntegrityError) -> bool:
+    constraint_name = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+    if constraint_name == PERSON_NAME_UNIQUE_CONSTRAINT:
+        return True
+
+    # SQLite does not expose named constraints, but is used by focused API tests.
+    return str(exc.orig) == "UNIQUE constraint failed: person.first, person.last"
 
 
 @router.get("", response_model=List[PersonResponse])
@@ -40,7 +52,16 @@ def create_person(person_data: PersonCreate, db: Session = Depends(get_db)):
     """Create a new person"""
     person = Person(**person_data.model_dump())
     db.add(person)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        if not _is_duplicate_person_error(exc):
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A person with this first and last name already exists",
+        ) from exc
     db.refresh(person)
     return person
 
