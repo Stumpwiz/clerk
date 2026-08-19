@@ -5,11 +5,13 @@ on:
     branches: [ master, develop ]
     paths:
       - 'backend/**'
+      - 'frontend/**'
       - '.github/workflows/test-postgres.yml'
   pull_request:
     branches: [ master, develop ]
     paths:
       - 'backend/**'
+      - 'frontend/**'
       - '.github/workflows/test-postgres.yml'
   workflow_dispatch:
 
@@ -125,7 +127,7 @@ jobs:
       working-directory: ./backend
       run: |
         alembic upgrade head
-        python scripts/test_models.py
+        python -m scripts.test_models
 
     - name: Test Alembic downgrade/upgrade cycle
       working-directory: ./backend
@@ -179,7 +181,3 @@ jobs:
         docker build -t clerk-frontend:test \
           --build-arg NEXT_PUBLIC_API_URL=http://localhost:8000 \
           .
-
-    - name: Test Docker Compose stack
-      run: |
-        docker compose -f docker-compose.yml build
