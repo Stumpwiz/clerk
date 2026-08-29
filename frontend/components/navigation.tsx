@@ -5,7 +5,7 @@ import Image from "next/image";
 import {usePathname} from "next/navigation";
 import {LocalUserMenu} from "@/components/local-user-menu";
 import type {LocalUser} from "@/lib/auth";
-import {Home, Users, Briefcase, UserCircle, Calendar, FileText, BarChart3, UsersRound, Mail} from "lucide-react";
+import {Home, Users, Briefcase, UserCircle, Calendar, FileText, BarChart3, UsersRound, Mail, CircleHelp} from "lucide-react";
 
 const navItems = [
     {href: "/dashboard", label: "Dashboard", icon: Home},
@@ -17,6 +17,7 @@ const navItems = [
     {href: "/dashboard/reports", label: "Rosters & Reports", icon: BarChart3},
     {href: "/dashboard/mailing-lists", label: "Mailing Lists", icon: Mail},
     {href: "/dashboard/users", label: "Users", icon: UsersRound},
+    {href: "/dashboard/help", label: "Help", icon: CircleHelp},
 ];
 
 interface NavigationProps {

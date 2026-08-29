@@ -1,6 +1,6 @@
 # app/routers/__init__.py - Export all routers
 
-from app.routers import auth, bodies, offices, persons, terms, letters, reports, users, mailing_lists
+from app.routers import auth, bodies, offices, persons, terms, letters, reports, users, mailing_lists, help
 
 __all__ = [
     "auth",
@@ -12,4 +12,5 @@ __all__ = [
     "reports",
     "users",
     "mailing_lists",
+    "help",
 ]

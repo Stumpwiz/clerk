@@ -1,5 +1,5 @@
 import Link from "next/link";
-import {Briefcase, Users, UserCircle, Calendar, FileText, BarChart3, UsersRound, Settings, Mail} from "lucide-react";
+import {Briefcase, Users, UserCircle, Calendar, FileText, BarChart3, UsersRound, Settings, Mail, CircleHelp} from "lucide-react";
 
 const cards = [
     {
@@ -64,6 +64,13 @@ const cards = [
     href: "/dashboard/profile",
     icon: Settings,
     color: "bg-gray-500",
+  },
+  {
+    title: "Need Help Using Clerk?",
+    description: "Step-by-step help for common Administrative Assistant tasks",
+    href: "/dashboard/help",
+    icon: CircleHelp,
+    color: "bg-blue-600",
   },
 ];
 

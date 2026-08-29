@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- In-application Help with task links and an authenticated printable Administrative Assistant guide.
+
 ## 2.0.0
 
 ### Changed

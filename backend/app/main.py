@@ -13,7 +13,7 @@ from app.database import get_db
 from app.models import ReportRecord
 
 # Import routers
-from app.routers import auth, bodies, offices, persons, terms, letters, reports, users, mailing_lists
+from app.routers import auth, bodies, offices, persons, terms, letters, reports, users, mailing_lists, help
 
 
 def _db_host_and_name(database_url: str) -> tuple[str, str]:
@@ -82,6 +82,7 @@ app.include_router(letters.router)  # Now uses /api/letters prefix
 app.include_router(reports.router)  # Reports/rosters generation
 app.include_router(mailing_lists.router)  # Mailing list generation
 app.include_router(users.router)  # Local user management
+app.include_router(help.router)  # Administrative Assistant help guide
 
 
 @app.get("/")
