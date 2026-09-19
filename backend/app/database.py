@@ -14,6 +14,7 @@ engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,  # Helps avoid stale PostgreSQL connections
     echo=settings.debug,
+    hide_parameters=True,  # Never log PDF bytes or other bound data.
 )
 
 # Create SessionLocal class for database sessions

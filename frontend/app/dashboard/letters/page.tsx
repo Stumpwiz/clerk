@@ -438,8 +438,7 @@ export default function LettersPage() {
                             </>
                         ) : (
                             <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-                                <p className="text-sm text-blue-700">No PDF files found in the files_letters
-                                    directory.</p>
+                                <p className="text-sm text-blue-700">No available letters.</p>
                             </div>
                         )}
                     </div>

@@ -1,8 +1,18 @@
 # app/models/letters.py - Letter template for welcome letters to new residents
 
-from sqlalchemy import Column, Integer, Text
+from sqlalchemy import Column, Integer, Text, LargeBinary, DateTime, func
 from sqlalchemy.orm import Session
 from app.database import Base
+
+
+class GeneratedLetter(Base):
+    """The durable PDF, independent of any application instance's filesystem."""
+
+    __tablename__ = 'generated_letters'
+
+    filename = Column(Text, primary_key=True)
+    pdf_bytes = Column(LargeBinary, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class LetterTemplate(Base):

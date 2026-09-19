@@ -1,6 +1,8 @@
 # app/routers/letters.py - Operations for LetterTemplate (singleton) and letter generation
 
-import os
+import shutil
+from tempfile import TemporaryDirectory
+from urllib.parse import quote
 import re
 import subprocess
 from datetime import datetime, date
@@ -8,12 +10,14 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import require_authenticated_user
 from app.database import get_db
-from app.models import LetterTemplate, ReportRecord
+from app.models import LetterTemplate, ReportRecord, GeneratedLetter
+from app.letter_storage import save_generated_pdf, validate_filename
 from app.schemas.letter import (
     LetterTemplateUpdate,
     LetterTemplateResponse,
@@ -24,12 +28,8 @@ from app.schemas.letter import (
 
 # Determine base directory for file storage
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-FILES_LETTERS_DIR = BASE_DIR / "files_letters"
 STATIC_IMAGES_DIR = BASE_DIR / "static" / "images"
 
-# Ensure directories exist
-FILES_LETTERS_DIR.mkdir(parents=True, exist_ok=True)
-STATIC_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter(
     prefix="/api/letters",
@@ -182,7 +182,7 @@ def build_latex_document(
 
 \\vspace*{{{logo_top_offset_in}in}}
 \\begin{{center}}
-    \\includegraphics[width={logo_width_in}in]{{../static/images/residentCouncilLogoSmall.jpg}} \\\\[0.5em]
+    \\includegraphics[width={logo_width_in}in]{{residentCouncilLogoSmall.jpg}} \\\\[0.5em]
 \\end{{center}}
 
 \\vspace{{0.6em}}
@@ -275,7 +275,7 @@ def generate_letter(
     signer_name, signer_apt = president_info
 
     # Extract last name from recipient (last word)
-    last_name = letter_data.recipient.split()[-1] if letter_data.recipient else 'Unknown'
+    last_name = letter_data.recipient.split()[-1] if letter_data.recipient.split() else 'Unknown'
 
     # Format the letter date
     formatted_letter_date = letter_data.letter_date.strftime('%B %d, %Y').replace(' 0', ' ')
@@ -301,71 +301,52 @@ def generate_letter(
     # Build filename
     safe_base = f"{effective_date_iso}_{last_name}" if last_name else f"{effective_date_iso}"
 
+    filename = f"{safe_base}.pdf"
     try:
-        # Create the .tex file
-        tex_file_path = FILES_LETTERS_DIR / f"{safe_base}.tex"
-        with open(tex_file_path, 'w', encoding='utf-8') as tex_file:
-            tex_file.write(tex_content)
+        validate_filename(filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-        # Path to output PDF
-        pdf_path = FILES_LETTERS_DIR / f"{safe_base}.pdf"
-
-        # Run xelatex - need to run it twice for proper page numbering and references
-        for run in range(2):
-            result = subprocess.run(
-                ["xelatex", "-interaction=nonstopmode", "-output-directory", str(FILES_LETTERS_DIR),
-                 str(tex_file_path)],
-                cwd=str(FILES_LETTERS_DIR),
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-
-        # Check if compilation succeeded and PDF was generated
-        if result.returncode == 0 and pdf_path.exists():
-            # Verify PDF is not empty (has reasonable size)
-            pdf_size = pdf_path.stat().st_size
-            if pdf_size < 1000:  # PDF should be at least 1KB
-                return LetterGenerateResponse(
-                    success=False,
-                    error="PDF file was generated but appears to be corrupted or empty"
+    try:
+        with TemporaryDirectory(prefix="clerk-letter-") as work_dir:
+            work = Path(work_dir)
+            # A fixed working name avoids user-controlled paths and LaTeX arguments.
+            tex_file = work / "letter.tex"
+            tex_file.write_text(tex_content, encoding="utf-8")
+            shutil.copyfile(STATIC_IMAGES_DIR / "residentCouncilLogoSmall.jpg",
+                            work / "residentCouncilLogoSmall.jpg")
+            for _ in range(2):
+                result = subprocess.run(
+                    ["xelatex", "-interaction=nonstopmode", "-halt-on-error",
+                     "-no-shell-escape", "letter.tex"],
+                    cwd=work, capture_output=True, text=True, timeout=30,
                 )
-
-            # Clean up LaTeX auxiliary files including .tex source
-            aux_extensions = ['.tex', '.aux', '.log', '.out', '.toc', '.lof', '.lot', '.fls', '.fdb_latexmk',
-                              '.synctex.gz', '.dvi']
-            for file in FILES_LETTERS_DIR.glob(f"{safe_base}.*"):
-                if file.suffix in aux_extensions:
-                    try:
-                        file.unlink()
-                    except Exception:
-                        pass
-
-            return LetterGenerateResponse(success=True, filename=f"{safe_base}.pdf")
-        else:
-            error_msg = "Failed to generate PDF. Check LaTeX template and logs."
-            if result.returncode != 0:
-                # Check for LaTeX errors in stdout
-                if "! " in result.stdout:
-                    error_lines = [line for line in result.stdout.split('\n') if "! " in line]
-                    if error_lines:
-                        error_msg = f"LaTeX error: {error_lines[0].strip()}"
-            return LetterGenerateResponse(success=False, error=error_msg)
-
+                if result.returncode != 0:
+                    return LetterGenerateResponse(success=False, error="Failed to generate PDF.")
+            pdf_path = work / "letter.pdf"
+            if not pdf_path.exists():
+                return LetterGenerateResponse(success=False, error="Failed to generate PDF.")
+            data = pdf_path.read_bytes()
+            if len(data) < 1000 or not data.startswith(b"%PDF-"):
+                return LetterGenerateResponse(success=False, error="Generated PDF is invalid or empty.")
+            save_generated_pdf(db, filename, data)
+            db.commit()
+        return LetterGenerateResponse(success=True, filename=filename)
     except subprocess.TimeoutExpired:
+        db.rollback()
         return LetterGenerateResponse(success=False, error="LaTeX compilation timed out")
-    except Exception as e:
-        return LetterGenerateResponse(success=False, error=f"Unexpected error: {str(e)}")
+    except Exception:
+        db.rollback()
+        # Do not expose database parameters (including PDF bytes) in errors.
+        return LetterGenerateResponse(success=False, error="Unable to generate or save the PDF. Please retry.")
 
 
 @router.get("/pdfs", response_model=List[PDFFileInfo])
-def list_pdfs():
+def list_pdfs(db: Session = Depends(get_db)):
     """List all generated PDF files"""
-    if not FILES_LETTERS_DIR.exists():
-        return []
-
-    # Gather all PDF files
-    all_pdfs = [f.name for f in FILES_LETTERS_DIR.glob("*.pdf")]
+    # Select metadata only; do not load PDF blobs for the list.
+    all_pdfs = db.scalars(select(GeneratedLetter.filename).order_by(
+        GeneratedLetter.created_at, GeneratedLetter.filename)).all()
 
     # Partition into dated and undated
     dated = []
@@ -398,59 +379,35 @@ def list_pdfs():
     return result
 
 
+def checked_filename(filename: str) -> str:
+    try:
+        validate_filename(filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return filename
+
+
 @router.get("/pdfs/{filename}")
-def view_pdf(filename: str):
-    """View a specific PDF file"""
-    pdf_path = FILES_LETTERS_DIR / filename
-
-    # Security: ensure filename doesn't contain path traversal
-    if ".." in filename or "/" in filename or "\\" in filename:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid filename"
-        )
-
-    if not pdf_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"PDF file {filename} not found"
-        )
-
-    # Return FileResponse without filename parameter to display inline
-    # Set Content-Disposition to inline for browser viewing
-    return FileResponse(
-        path=str(pdf_path),
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'inline; filename="{filename}"'
-        }
+def view_pdf(filename: str, db: Session = Depends(get_db)):
+    letter = db.get(GeneratedLetter, checked_filename(filename))
+    if letter is None:
+        raise HTTPException(status_code=404, detail=f"PDF file {filename} not found")
+    return Response(
+        content=letter.pdf_bytes, media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(filename, safe='')}",
+                 "Cache-Control": "private, no-store"},
     )
 
 
 @router.delete("/pdfs/{filename}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_pdf(filename: str):
-    """Delete a specific PDF file"""
-    pdf_path = FILES_LETTERS_DIR / filename
-
-    # Security: ensure filename doesn't contain path traversal
-    if ".." in filename or "/" in filename or "\\" in filename:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid filename"
-        )
-
-    if not pdf_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"PDF file {filename} not found"
-        )
-
+def delete_pdf(filename: str, db: Session = Depends(get_db)):
+    letter = db.get(GeneratedLetter, checked_filename(filename))
+    if letter is None:
+        raise HTTPException(status_code=404, detail=f"PDF file {filename} not found")
     try:
-        pdf_path.unlink()
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error deleting PDF: {str(e)}"
-        )
-
-    return None
+        db.delete(letter)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Unable to delete PDF") from exc
+    return Response(status_code=204)

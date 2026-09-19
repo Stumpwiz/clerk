@@ -5,7 +5,7 @@ from app.models.person import Person
 from app.models.office import Office
 from app.models.term import Term
 from app.models.report_record import ReportRecord
-from app.models.letters import LetterTemplate
+from app.models.letters import LetterTemplate, GeneratedLetter
 from app.models.user import User
 
 __all__ = [
@@ -15,5 +15,6 @@ __all__ = [
     "Term",
     "ReportRecord",
     "LetterTemplate",
+    "GeneratedLetter",
     "User",
 ]

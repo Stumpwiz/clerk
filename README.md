@@ -202,7 +202,8 @@ After deploying:
 - **Backend**: AWS App Runner containerized FastAPI
 - **Database**: AWS RDS PostgreSQL
 - **Authentication**: Local signed HTTP-only cookies
-- **File Storage**: Generated letter and report directories
+- **File Storage**: Generated letter PDFs in PostgreSQL; reports use generated directories.
+  See [letter persistence release procedure](docs/letter-persistence-release.md) for legacy PDF import and verification.
 
 ## Documentation
 

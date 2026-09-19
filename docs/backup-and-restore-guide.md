@@ -2,6 +2,10 @@
 
 This guide explains how to back up and restore PostgreSQL databases for local environments and AWS RDS PostgreSQL. It also includes snapshot, point-in-time recovery (PITR) notes, and verification steps.
 
+Generated PDFs in `generated_letters` are included in database backups. Historical
+filesystem PDFs must first be preserved and imported; see [the letter persistence
+release procedure](letter-persistence-release.md).
+
 #### Prerequisites
 - Python 3 with project requirements installed.
 - For PostgreSQL tasks: pg_dump, pg_restore, and psql on PATH.

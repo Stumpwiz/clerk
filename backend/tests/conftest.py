@@ -71,6 +71,7 @@ def pg_session(migrated_postgres: str) -> Iterator[Session]:
         conn.execute(text("DELETE FROM person"))
         conn.execute(text("DELETE FROM body"))
         conn.execute(text("DELETE FROM letters"))
+        conn.execute(text("DELETE FROM generated_letters"))
         conn.execute(text("DELETE FROM users"))
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
     try:

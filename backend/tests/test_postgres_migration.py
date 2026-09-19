@@ -38,7 +38,7 @@ def test_alembic_migration_creates_tables(migrated_postgres: str):
     try:
         insp = inspect(eng)
         tables = set(insp.get_table_names(schema="public"))
-        for t in ("body", "office", "person", "term", "letters", "users"):
+        for t in ("body", "office", "person", "term", "letters", "users", "generated_letters"):
             assert t in tables, f"Missing table: {t}"
         user_columns = {column["name"] for column in insp.get_columns("users", schema="public")}
         assert {
