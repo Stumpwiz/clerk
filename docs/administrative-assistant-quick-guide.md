@@ -268,8 +268,11 @@ Person record.
 Select **the pencil icon** beside the account. **The pencil icon** allows changes to **Display Name** and **Active** status; it
 displays but does not allow changes to the email address.
 
-There is no **Delete User** operation in the GUI. When someone should no longer have access, edit the User, clear
-**Active**, and save. An inactive User cannot sign in or access protected Clerk functions.
+When someone should no longer have access, edit the User, clear **Active**, and save.
+An inactive User cannot sign in or access protected Clerk functions. To permanently
+remove an inactive account, select its red trash-can action and confirm the displayed
+name and email. Active accounts must first be made inactive; you can never delete
+your own account. Cancelling confirmation leaves the account unchanged.
 
 ### Reset another User's password
 

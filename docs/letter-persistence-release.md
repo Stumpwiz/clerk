@@ -31,7 +31,8 @@ letters generated or deleted afterward.
 ## Migration and import, after approval
 
 1. Verify the production DB target, backup, and Alembic revision. Expected existing
-   head: `7a4d1f8c2e91`; investigate any mismatch.
+   head: `7a4d1f8c2e91`; investigate any mismatch. Confirm no production foreign keys
+   reference `users` before releasing deletion.
 2. Set `DATABASE_URL` securely in the operator environment, never in command arguments
    or logs. From `backend/` in the reviewed checkout, apply the additive migration:
 
@@ -66,7 +67,10 @@ letters generated or deleted afterward.
    In an isolated test environment generate a letter, replace the application while
    keeping PostgreSQL, verify bytes, then delete it. Repeat the production manifest
    comparison following a later authorized backend replacement.
-6. After persistence verification, end the coordinated pause in letter writes.
+6. After persistence verification, release user deletion separately and verify both
+   services. The existing push workflow can deploy backend and frontend concurrently;
+   wait for both before checking self/active refusal and inactive-other confirmation.
+   End the coordinated pause in letter writes.
 
 Keep the preservation archive. Do not drop/downgrade `generated_letters` as a rollback
 step. Filesystem-only code hides DB PDFs and reintroduces loss for new letters;
@@ -76,4 +80,6 @@ fix forward or restore database-backed code.
 
 Use only disposable PostgreSQL: `pg_session` deletes application rows between tests.
 Set `DATABASE_URL` explicitly to that test DB. Run the backend suite, including
-`test_letters.py`. In `frontend/`, `npm run build` checks UI integration.
+`test_letters.py` and `test_user_deletion.py`. The latter verifies DELETE waits for
+concurrent reactivation and then returns 409. In `frontend/`, `npm test` verifies
+confirmation/cancellation/refusals; `npm run build` checks UI integration.

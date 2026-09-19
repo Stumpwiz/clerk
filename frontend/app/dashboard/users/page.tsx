@@ -1,9 +1,11 @@
 'use client';
 
 import {useState, useEffect} from 'react';
-import {Loader2, Mail, Calendar, User as UserIcon, Plus, Edit2, KeyRound} from 'lucide-react';
+import {Loader2, Mail, Calendar, User as UserIcon, Plus, Edit2, KeyRound, Trash2} from 'lucide-react';
 import {Modal} from '@/components/modal';
 import {Toast} from '@/components/toast';
+import {getCurrentUser} from '@/lib/auth';
+import {deleteUserWithConfirmation} from '@/lib/user-deletion';
 
 const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_URL ?? '';
@@ -63,6 +65,7 @@ function getApiErrorMessage(errorBody: unknown, fallback: string) {
 
 export default function UsersPage() {
     const [users, setUsers] = useState<LocalUser[]>([]);
+    const [deletingId, setDeletingId] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -114,6 +117,34 @@ export default function UsersPage() {
             setError('Failed to load users. Please try again.');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDeleteUser = async (user: LocalUser) => {
+        if (deletingId !== null) return;
+        setDeletingId(user.id);
+        try {
+            const currentUser = await getCurrentUser();
+            if (!currentUser) throw new Error('Authentication required. Please sign in again.');
+            const deleted = await deleteUserWithConfirmation(
+                user, currentUser.id, message => window.confirm(message), async id => {
+                    const response = await fetch(`${API_BASE_URL}/api/users/${id}`, {
+                        method: 'DELETE', credentials: 'include',
+                    });
+                    if (!response.ok) {
+                        const body = await response.json().catch(() => null);
+                        throw new Error(getApiErrorMessage(body, 'Failed to delete user'));
+                    }
+                },
+            );
+            if (deleted) {
+                setToast({message: 'User deleted successfully!', type: 'success'});
+                await loadUsers();
+            }
+        } catch (err) {
+            setToast({message: err instanceof Error ? err.message : 'Failed to delete user', type: 'error'});
+        } finally {
+            setDeletingId(null);
         }
     };
 
@@ -459,6 +490,16 @@ export default function UsersPage() {
                                             >
                                                 <KeyRound className="w-4 h-4 inline"/>
                                             </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDeleteUser(user)}
+                                                disabled={deletingId !== null}
+                                                className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                                                title={user.is_active ? 'Delete user — make inactive first' : 'Delete user'}
+                                                aria-label={`Delete ${user.display_name} (${user.email})`}
+                                            >
+                                                <Trash2 className="w-4 h-4 inline"/>
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -468,6 +509,11 @@ export default function UsersPage() {
                     </div>
                 )}
             </div>
+
+            <p className="text-sm text-gray-600">
+                Users must be inactive before deletion. You cannot delete your own account.
+                Deletion is permanent and requires confirmation.
+            </p>
 
             <Modal
                 isOpen={isAddModalOpen}
