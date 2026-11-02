@@ -29,6 +29,7 @@ class UserResponse(BaseModel):
     display_name: str
     avatar_path: str | None = None
     is_active: bool
+    is_admin: bool
     last_login_at: datetime | None = None
 
     model_config = {"from_attributes": True}

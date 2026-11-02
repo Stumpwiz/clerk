@@ -40,7 +40,7 @@ def test_session_cookie_round_trip_tamper_and_expiry():
     assert parse_session_cookie_value(expired_cookie) is None
 
 
-def _make_test_client():
+def _make_test_client(*, is_admin=True):
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -57,6 +57,7 @@ def _make_test_client():
                 password_hash=hash_password("password123"),
                 display_name="Trusted User",
                 is_active=True,
+                is_admin=is_admin,
             )
         )
         session.add(

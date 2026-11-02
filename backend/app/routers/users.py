@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.auth.dependencies import require_authenticated_user
+from app.auth.dependencies import require_administrator
 from app.auth.passwords import hash_password
 from app.database import get_db
 from app.models import User
@@ -17,7 +17,7 @@ from app.models import User
 router = APIRouter(
     prefix="/api/users",
     tags=["users"],
-    dependencies=[Depends(require_authenticated_user)],
+    dependencies=[Depends(require_administrator)],
 )
 
 
@@ -39,6 +39,8 @@ class UserCreateRequest(BaseModel):
     display_name: str
     password: str
     is_active: bool = True
+
+    model_config = ConfigDict(extra="forbid")
 
     @field_validator("display_name")
     @classmethod
@@ -122,6 +124,9 @@ def update_user(user_id: int, request: UserUpdateRequest, db: Session = Depends(
             detail=f"User with id {user_id} not found",
         )
 
+    if user.is_admin and not request.is_active:
+        raise HTTPException(status_code=403, detail="Administrator accounts cannot be deactivated.")
+
     user.display_name = request.display_name
     user.is_active = request.is_active
     db.commit()
@@ -152,7 +157,7 @@ def reset_user_password(user_id: int, request: UserPasswordResetRequest, db: Ses
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
     user_id: int,
-    current_user: User = Depends(require_authenticated_user),
+    current_user: User = Depends(require_administrator),
     db: Session = Depends(get_db),
 ):
     if user_id == current_user.id:
@@ -163,6 +168,8 @@ def delete_user(
                      .execution_options(populate_existing=True))
     if user is None:
         raise HTTPException(status_code=404, detail=f"User with id {user_id} not found")
+    if user.is_admin:
+        raise HTTPException(status_code=403, detail="Administrator accounts cannot be deleted.")
     if user.is_active:
         raise HTTPException(status_code=409,
                             detail="This user must first be made inactive before deletion.")
