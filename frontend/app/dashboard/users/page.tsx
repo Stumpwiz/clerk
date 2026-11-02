@@ -1,11 +1,12 @@
 'use client';
 
-import {useState, useEffect} from 'react';
+import {useState, useEffect, useCallback} from 'react';
 import {Loader2, Mail, Calendar, User as UserIcon, Plus, Edit2, KeyRound, Trash2} from 'lucide-react';
 import {Modal} from '@/components/modal';
 import {Toast} from '@/components/toast';
 import {getCurrentUser} from '@/lib/auth';
 import {deleteUserWithConfirmation} from '@/lib/user-deletion';
+import {useCurrentUser} from '@/lib/current-user';
 
 const API_BASE_URL =
     process.env.NEXT_PUBLIC_API_URL ?? '';
@@ -64,6 +65,8 @@ function getApiErrorMessage(errorBody: unknown, fallback: string) {
 }
 
 export default function UsersPage() {
+    const currentUser = useCurrentUser();
+    const [accessDenied, setAccessDenied] = useState(false);
     const [users, setUsers] = useState<LocalUser[]>([]);
     const [deletingId, setDeletingId] = useState<number | null>(null);
     const [loading, setLoading] = useState(true);
@@ -93,11 +96,18 @@ export default function UsersPage() {
         type: 'success' | 'error';
     } | null>(null);
 
-    useEffect(() => {
-        loadUsers();
+    const denyAccess = useCallback(() => {
+        setAccessDenied(true);
+        setUsers([]);
+        setEditingUser(null);
+        setResetUser(null);
+        setIsAddModalOpen(false);
+        setIsEditModalOpen(false);
+        setIsResetModalOpen(false);
     }, []);
 
-    const loadUsers = async () => {
+    const loadUsers = useCallback(async () => {
+        if (currentUser?.is_admin !== true || accessDenied) return;
         try {
             setLoading(true);
             setError(null);
@@ -106,6 +116,10 @@ export default function UsersPage() {
                 credentials: 'include',
             });
 
+            if (response.status === 403) {
+                denyAccess();
+                return;
+            }
             if (!response.ok) {
                 throw new Error('Failed to fetch users');
             }
@@ -118,7 +132,11 @@ export default function UsersPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [currentUser, accessDenied, denyAccess]);
+
+    useEffect(() => {
+        void loadUsers();
+    }, [loadUsers]);
 
     const handleDeleteUser = async (user: LocalUser) => {
         if (deletingId !== null) return;
@@ -361,7 +379,11 @@ export default function UsersPage() {
         });
     };
 
-    if (loading) {
+    if (accessDenied || (currentUser && currentUser.is_admin !== true)) {
+        return <div role="alert" className="px-4 py-6">Access denied. Administrator access is required.</div>;
+    }
+
+    if (!currentUser || loading) {
         return (
             <div className="flex items-center justify-center h-64">
                 <Loader2 className="h-8 w-8 animate-spin text-blue-600"/>

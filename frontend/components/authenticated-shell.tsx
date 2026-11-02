@@ -6,6 +6,7 @@ import {Loader2} from "lucide-react";
 import {Navigation} from "@/components/navigation";
 import type {LocalUser} from "@/lib/auth";
 import {getCurrentUser} from "@/lib/auth";
+import {CurrentUserContext} from "@/lib/current-user";
 
 interface AuthenticatedShellProps {
     children: React.ReactNode;
@@ -16,10 +17,15 @@ export function AuthenticatedShell({children}: AuthenticatedShellProps) {
     const router = useRouter();
     const [user, setUser] = useState<LocalUser | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [verifiedPathname, setVerifiedPathname] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         let isMounted = true;
+        setUser(null);
+        setIsLoading(true);
+        setVerifiedPathname(null);
+        setError(null);
 
         async function loadCurrentUser() {
             try {
@@ -33,6 +39,7 @@ export function AuthenticatedShell({children}: AuthenticatedShellProps) {
                 }
 
                 setUser(currentUser);
+                setVerifiedPathname(pathname);
             } catch (err) {
                 if (!isMounted) return;
                 setError(err instanceof Error ? err.message : "Unable to load local session");
@@ -50,7 +57,8 @@ export function AuthenticatedShell({children}: AuthenticatedShellProps) {
         };
     }, [pathname, router]);
 
-    if (isLoading || !user) {
+    // Gate the first render after navigation, before the refresh effect runs.
+    if (verifiedPathname !== pathname || isLoading || !user) {
         return (
             <div className="min-h-screen bg-gray-50">
                 <div className="flex h-screen items-center justify-center">
@@ -69,7 +77,9 @@ export function AuthenticatedShell({children}: AuthenticatedShellProps) {
                         {error}
                     </div>
                 )}
-                {children}
+                <CurrentUserContext.Provider value={user}>
+                    {children}
+                </CurrentUserContext.Provider>
             </main>
         </div>
     );

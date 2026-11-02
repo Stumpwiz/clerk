@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import {useCurrentUser} from "@/lib/current-user";
 import {Briefcase, Users, UserCircle, Calendar, FileText, BarChart3, UsersRound, Settings, Mail, CircleHelp} from "lucide-react";
 
 const cards = [
@@ -75,6 +78,7 @@ const cards = [
 ];
 
 export default function DashboardPage() {
+    const user = useCurrentUser();
     return (
         <div className="px-4 sm:px-0">
             <div className="mb-8">
@@ -85,7 +89,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                {cards.map((card) => {
+                {cards.filter(card => card.href !== "/dashboard/users" || user?.is_admin === true).map((card) => {
                     const Icon = card.icon;
                     return (
                         <Link

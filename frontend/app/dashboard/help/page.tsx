@@ -3,6 +3,7 @@
 import {useState} from "react";
 import Link from "next/link";
 import {ExternalLink, Loader2} from "lucide-react";
+import {useCurrentUser} from "@/lib/current-user";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -50,6 +51,7 @@ const tasks = [
 ];
 
 export default function HelpPage() {
+    const user = useCurrentUser();
     const [isOpeningGuide, setIsOpeningGuide] = useState(false);
     const [guideError, setGuideError] = useState<string | null>(null);
 
@@ -92,7 +94,7 @@ export default function HelpPage() {
                     <h2 className="text-xl font-semibold text-gray-900">What do you want to do?</h2>
                 </div>
                 <ul className="divide-y divide-gray-200">
-                    {tasks.map((item) => (
+                    {tasks.filter(item => !item.links.some(link => link.href === "/dashboard/users") || user?.is_admin === true).map((item) => (
                         <li key={item.task} className="px-6 py-4 sm:flex sm:items-center sm:justify-between sm:gap-6">
                             <div>
                                 <p className="font-medium text-gray-900">{item.task}</p>
