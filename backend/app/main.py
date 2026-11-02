@@ -1,16 +1,12 @@
 # app/main.py - FastAPI application entry point
 
 from contextlib import asynccontextmanager
-from typing import List
 from urllib.parse import urlparse
 
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import get_db
-from app.models import ReportRecord
 
 # Import routers
 from app.routers import auth, bodies, offices, persons, terms, letters, reports, users, mailing_lists, help
@@ -99,30 +95,6 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
-
-
-@app.get("/api/report-records", response_model=List[dict])
-async def get_report_records(db: Session = Depends(get_db)):
-    """Get all report records (view data for roster/report generation)"""
-    records = db.query(ReportRecord).all()
-    return [
-        {
-            "person_id": r.person_id,
-            "first": r.first,
-            "last": r.last,
-            "email": r.email,
-            "phone": r.phone,
-            "apt": r.apt,
-            "start": r.start.isoformat() if r.start else None,
-            "end": r.end.isoformat() if r.end else None,
-            "ordinal": r.ordinal,
-            "office_id": r.office_id,
-            "title": r.title,
-            "body_id": r.body_id,
-            "name": r.name,
-        }
-        for r in records
-    ]
 
 
 if __name__ == "__main__":
