@@ -90,7 +90,7 @@ async def list_mailing_lists():
     ]
 
 
-@router.get("/{list_id}")
+@router.post("/{list_id}")
 async def generate_mailing_list(list_id: str, db: Session = Depends(get_db)):
     entry = MAILING_LIST_REGISTRY.get(list_id)
     if entry is None:

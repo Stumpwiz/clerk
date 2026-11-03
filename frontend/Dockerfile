@@ -2,7 +2,7 @@
 # Multi-stage build for optimized production image
 
 # Stage 1: Dependencies
-FROM node:20-alpine AS deps
+FROM node:22.23.4-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS deps
 WORKDIR /app
 
 # Copy package files
@@ -12,7 +12,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 # Stage 2: Builder
-FROM node:20-alpine AS builder
+FROM node:22.23.4-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS builder
 WORKDIR /app
 
 # Copy dependencies from deps stage
@@ -37,7 +37,7 @@ RUN npm run build
 RUN ! grep -R "wintermute:8000" -n .next/ || (echo "❌ Build contains wintermute:8000" && exit 1)
 
 # Stage 3: Runner
-FROM node:20-alpine AS runner
+FROM node:22.23.4-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS runner
 WORKDIR /app
 
 # Set environment to production

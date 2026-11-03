@@ -52,7 +52,7 @@ export function Navigation({user}: NavigationProps) {
                     </div>
 
                     <div className="flex min-w-0 flex-nowrap gap-1 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0">
-                        {navItems.map((item) => {
+                        {navItems.filter(item => item.href !== "/dashboard/users" || user?.is_admin === true).map((item) => {
                             const Icon = item.icon;
                             const isActive = pathname === item.href;
                             return (

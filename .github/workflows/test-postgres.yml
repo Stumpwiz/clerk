@@ -36,6 +36,7 @@ jobs:
           - 5432:5432
 
     env:
+      CLERK_ENV: test
       DATABASE_URL: postgresql://clerk_user:clerk_test_password@localhost:5432/clerk_test_db
       AUTH_SECRET_KEY: test-auth-secret
 
@@ -101,6 +102,7 @@ jobs:
           - 5432:5432
 
     env:
+      CLERK_ENV: test
       DATABASE_URL: postgresql://clerk_user:clerk_test_password@localhost:5432/clerk_test_db
 
     steps:

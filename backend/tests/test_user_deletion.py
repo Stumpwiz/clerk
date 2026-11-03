@@ -17,7 +17,7 @@ from app.routers.users import router, delete_user
 
 @pytest.fixture
 def users(pg_session):
-    caller = User(email='caller@example.com', display_name='Caller', password_hash='unused', is_active=True)
+    caller = User(email='caller@example.com', display_name='Caller', password_hash='unused', is_active=True, is_admin=True)
     target = User(email='target@example.com', display_name='Target', password_hash='unused', is_active=False)
     pg_session.add_all([caller, target]); pg_session.commit()
     app = FastAPI(); app.include_router(router)

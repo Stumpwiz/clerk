@@ -1,9 +1,11 @@
 """app/config.py - Configuration management using environment variables"""
 from pathlib import Path
-from typing import List, Union
+from typing import Literal
+import json
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from app.auth.origin import valid_origin
 
 # Determine backend directory (absolute) to load backend/.env reliably
 BACKEND_DIR = Path(__file__).resolve().parent.parent
@@ -14,6 +16,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
 
     # Application
+    clerk_env: Literal["production", "development", "test"] = Field(default="production", validation_alias="CLERK_ENV")
     app_name: str = "Community Admin"
     debug: bool = Field(default=True, validation_alias="DEBUG")
     api_host: str = Field(default="0.0.0.0", validation_alias="API_HOST")
@@ -27,7 +30,7 @@ class Settings(BaseSettings):
     )
 
     # CORS - Origins that can access the API
-    cors_origins: Union[List[str], str] = Field(
+    cors_origins: list[str] | str = Field(
         default=[
             "http://localhost:3000",
             "http://localhost:3001",
@@ -46,8 +49,25 @@ class Settings(BaseSettings):
     def parse_cors_origins(cls, v):
         """Parse CORS origins from a comma-separated string or list"""
         if isinstance(v, str):
+            if v.lstrip().startswith("["):
+                return json.loads(v)
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
+
+    @model_validator(mode="after")
+    def validate_browser_security(self):
+        if not self.cors_origins or any(not valid_origin(origin) for origin in self.cors_origins):
+            raise ValueError("CORS_ORIGINS must contain valid exact HTTP(S) origins")
+        if self.clerk_env == "production":
+            if not self.session_cookie_secure or self.session_cookie_samesite != "lax":
+                raise ValueError("Production cookies require Secure and SameSite=lax")
+            if "auth_secret_key" not in self.model_fields_set or not self.auth_secret_key.strip() or self.auth_secret_key.strip().lower() in {
+                "dev-auth-secret-change-me", "change-me", "changeme", "secret", "development", "test",
+            }:
+                raise ValueError("Production requires an explicit non-development signing key")
+            if "cors_origins" not in self.model_fields_set or any(not origin.startswith("https://") for origin in self.cors_origins):
+                raise ValueError("Production requires explicit HTTPS frontend origins")
+        return self
 
     # Local authentication foundation
     auth_secret_key: str = Field(default="dev-auth-secret-change-me", validation_alias="AUTH_SECRET_KEY")

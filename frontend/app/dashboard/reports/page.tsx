@@ -112,6 +112,7 @@ export default function ReportsPage() {
 
         try {
             const response = await fetch(`${API_BASE_URL}${report.endpoint}`, {
+                method: 'POST',
                 credentials: 'include',
             });
 

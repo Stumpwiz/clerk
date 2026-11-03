@@ -13,12 +13,13 @@ from app.models import User
 
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User | None:
     cookie_value = request.cookies.get(settings.session_cookie_name)
-    user_id = parse_session_cookie_value(cookie_value)
-    if user_id is None:
+    session = parse_session_cookie_value(cookie_value)
+    if session is None:
         return None
 
+    user_id, version = session
     user = db.get(User, user_id)
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or user.session_version != version:
         return None
     return user
 
@@ -30,5 +31,16 @@ def require_authenticated_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required",
+        )
+    return current_user
+
+
+def require_administrator(
+    current_user: User = Depends(require_authenticated_user),
+) -> User:
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator access required",
         )
     return current_user
