@@ -21,9 +21,14 @@ class BootstrapRefused(Exception):
     """The one-time bootstrap preconditions or postcondition were not met."""
 
 
-def bootstrap(session, user_id: int, *, dry_run: bool) -> None:
+def bootstrap(session, user_id: int, *, dry_run: bool, user_table=None) -> None:
     """Use a fresh session; all checks and the sole update share one transaction."""
-    from app.models import User
+    # An explicit table lets maintenance reuse these safeguards without loading
+    # application configuration. The ordinary CLI retains the existing model.
+    if user_table is None:
+        from app.models import User
+        user_table = User.__table__
+    columns = user_table.c
 
     if type(user_id) is not int or user_id <= 0:
         raise BootstrapRefused()
@@ -43,9 +48,9 @@ def bootstrap(session, user_id: int, *, dry_run: bool) -> None:
             raise BootstrapRefused()
 
         matches = session.scalars(
-            select(User.id).where(User.id == user_id, User.is_active.is_(True))
+            select(columns.id).where(columns.id == user_id, columns.is_active.is_(True))
         ).all()
-        administrators = select(func.count()).select_from(User).where(User.is_admin.is_(True))
+        administrators = select(func.count()).select_from(user_table).where(columns.is_admin.is_(True))
         if len(matches) != 1 or session.scalar(administrators) != 0:
             raise BootstrapRefused()
         if dry_run:
@@ -58,7 +63,7 @@ def bootstrap(session, user_id: int, *, dry_run: bool) -> None:
             "UPDATE users SET is_admin = true "
             "WHERE id = :user_id AND is_active = true AND is_admin = false"
         ), {"user_id": user_id})
-        active_administrators = administrators.where(User.is_active.is_(True))
+        active_administrators = administrators.where(columns.is_active.is_(True))
         if (result.rowcount != 1 or session.scalar(administrators) != 1
                 or session.scalar(active_administrators) != 1):
             raise BootstrapRefused()
