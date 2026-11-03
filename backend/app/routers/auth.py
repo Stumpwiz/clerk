@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, EmailStr
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.auth.cookies import clear_session_cookie, set_session_cookie
@@ -69,10 +69,12 @@ def login(request: LoginRequest, response: Response, db: Session = Depends(get_d
             detail="Account is inactive",
         )
 
+    # Bind the cookie to the password snapshot that was actually verified.
+    session_version = user.session_version
     user.last_login_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(user)
-    set_session_cookie(response, user.id)
+    set_session_cookie(response, user.id, session_version)
     return LoginResponse(user=UserResponse.model_validate(user))
 
 
@@ -90,6 +92,7 @@ def me(current_user: User = Depends(require_authenticated_user)):
 @router.post("/change-password", response_model=ChangePasswordResponse)
 def change_password(
     request: ChangePasswordRequest,
+    response: Response,
     current_user: User = Depends(require_authenticated_user),
     db: Session = Depends(get_db),
 ):
@@ -119,7 +122,12 @@ def change_password(
             detail="New password must be different from the current password",
         )
 
-    current_user.password_hash = hash_password(request.new_password)
-    db.add(current_user)
+    db.execute(
+        update(User).where(User.id == current_user.id).values(
+            password_hash=hash_password(request.new_password),
+            session_version=User.session_version + 1,
+        )
+    )
     db.commit()
+    clear_session_cookie(response)
     return ChangePasswordResponse(success=True)

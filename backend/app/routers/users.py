@@ -5,7 +5,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -149,7 +149,12 @@ def reset_user_password(user_id: int, request: UserPasswordResetRequest, db: Ses
             detail="New password must be at least 8 characters",
         )
 
-    user.password_hash = hash_password(request.new_password)
+    db.execute(
+        update(User).where(User.id == user.id).values(
+            password_hash=hash_password(request.new_password),
+            session_version=User.session_version + 1,
+        )
+    )
     db.commit()
     return {"success": True}
 

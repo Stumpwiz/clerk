@@ -14,6 +14,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     email = Column(String(255), nullable=False)
     password_hash = Column(String(512), nullable=False)
+    session_version = Column(Integer, nullable=False, default=0, server_default="0")
     display_name = Column(String(255), nullable=False)
     avatar_path = Column(Text, nullable=True, default=None)
     is_active = Column(Boolean, nullable=False, server_default="true", default=True)

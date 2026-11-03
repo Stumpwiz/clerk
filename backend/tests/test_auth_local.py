@@ -32,7 +32,7 @@ def test_password_hashing_round_trip():
 def test_session_cookie_round_trip_tamper_and_expiry():
     cookie_value = create_session_cookie_value(user_id=42, ttl_seconds=60)
 
-    assert parse_session_cookie_value(cookie_value) == 42
+    assert parse_session_cookie_value(cookie_value) == (42, 0)
     assert parse_session_cookie_value(f"{cookie_value}x") is None
 
     expired_cookie = create_session_cookie_value(user_id=42, ttl_seconds=-1)
@@ -144,7 +144,7 @@ def test_logout_clears_cookie_and_me_requires_authentication():
         engine.dispose()
 
 
-def test_change_password_updates_hash_preserves_session_and_new_login_works():
+def test_change_password_updates_hash_invalidates_session_and_new_login_works():
     client, engine = _make_test_client()
     try:
         login_response = client.post(
@@ -164,7 +164,7 @@ def test_change_password_updates_hash_preserves_session_and_new_login_works():
 
         assert response.status_code == 200
         assert response.json() == {"success": True}
-        assert client.get("/api/auth/me").status_code == 200
+        assert client.get("/api/auth/me").status_code == 401
 
         with engine.connect() as connection:
             row = connection.exec_driver_sql(
