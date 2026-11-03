@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from app.auth.origin import configure_origin_protection
 
 from app.config import settings
 
@@ -60,13 +60,7 @@ async def log_exceptions(request: Request, call_next):
 
 # Configure CORS
 print("CORS ORIGINS:", settings.cors_origins)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+configure_origin_protection(app, settings.cors_origins)
 
 # Include routers
 app.include_router(auth.router)
