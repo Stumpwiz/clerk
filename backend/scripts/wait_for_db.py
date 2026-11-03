@@ -99,7 +99,7 @@ def main() -> int:
     interval = max(0.1, args.interval)
 
     if not args.quiet:
-        print(f"[wait-for-db] Using DATABASE_URL={url or '(empty)'}")
+        print("[wait-for-db] Checking database readiness.")
 
     while True:
         attempt += 1
@@ -122,7 +122,7 @@ def main() -> int:
         # Execute the given command in a shell to allow chaining (&&, env expansion)
         cmd_str = " ".join(shlex.quote(x) for x in passthrough)
         if not args.quiet:
-            print(f"[wait-for-db] Executing: {cmd_str}")
+            print("[wait-for-db] Executing follow-up command.")
         # Use shell=True to support '&&' sequences
         return subprocess.call(cmd_str, shell=True)
 
