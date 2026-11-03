@@ -1,14 +1,16 @@
 name: Deploy to AWS App Runner
 
 on:
-  push:
-    branches: [ master ]
-    paths:
-      - 'backend/**'
-      - 'frontend/**'
-      - '.github/workflows/deploy-aws.yml'
   workflow_dispatch:
     inputs:
+      mode:
+        description: 'Validate locally on the runner, or explicitly deploy'
+        required: true
+        default: validate
+        type: choice
+        options:
+          - validate
+          - deploy
       deploy_target:
         description: 'Choose what to deploy'
         required: true
@@ -29,42 +31,175 @@ env:
   NEXT_PUBLIC_API_URL: https://api.mrrc.online
 
 jobs:
-  detect-changes:
-    name: Detect Changed Paths
-    runs-on: ubuntu-latest
-    outputs:
-      backend_changed: ${{ steps.filter.outputs.backend }}
-      frontend_changed: ${{ steps.filter.outputs.frontend }}
-      workflow_changed: ${{ steps.filter.outputs.workflow }}
+  validate-amd64:
+    name: Native AMD64 validation (no deployment)
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'validate'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
     steps:
-      - name: Checkout code
+      - name: Checkout reviewed source
         uses: actions/checkout@v4
-
-      - name: Detect changes
-        id: filter
-        uses: dorny/paths-filter@v3
         with:
-          filters: |
-            backend:
-              - 'backend/**'
-            frontend:
-              - 'frontend/**'
-            workflow:
-              - '.github/workflows/deploy-aws.yml'
+          persist-credentials: false
+
+      - name: Record source and native runner
+        run: |
+          set -euo pipefail
+          mkdir -p validation-evidence
+          test "$(uname -m)" = x86_64
+          test "$RUNNER_ARCH" = X64
+          {
+            echo "Source commit: $(git rev-parse HEAD)"
+            echo "Workflow run: $GITHUB_RUN_ID attempt $GITHUB_RUN_ATTEMPT"
+            echo "Runner architecture: $(uname -m) / $RUNNER_ARCH"
+            docker version
+          } | tee validation-evidence/environment.txt
+
+      - name: Build AMD64 images without registry push
+        run: |
+          set -euo pipefail
+          docker build --platform linux/amd64 --target builder \
+            --build-arg NEXT_PUBLIC_API_URL=https://api.mrrc.online \
+            -t clerk-frontend-checks:local ./frontend 2>&1 | tee validation-evidence/frontend-builder.log
+          docker build --platform linux/amd64 \
+            --build-arg NEXT_PUBLIC_API_URL=https://api.mrrc.online \
+            -t clerk-frontend:local ./frontend 2>&1 | tee validation-evidence/frontend-build.log
+          docker build --platform linux/amd64 -t clerk-backend:local ./backend \
+            2>&1 | tee validation-evidence/backend-build.log
+          for image in clerk-frontend:local clerk-backend:local; do
+            test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image")" = linux/amd64
+            docker image inspect --format 'Local image ID (not ECR digest): {{.Id}} platform={{.Os}}/{{.Architecture}} tags={{json .RepoTags}}' "$image"
+          done | tee validation-evidence/image-identities.txt
+
+      - name: Frontend tests, TypeScript and targeted ESLint
+        run: |
+          set -euo pipefail
+          docker run --rm --network none clerk-frontend-checks:local sh -ec '
+            npm test
+            ./node_modules/.bin/tsc --noEmit --incremental false
+            ./node_modules/.bin/eslint app/dashboard/profile/page.tsx app/local-login/page.tsx app/dashboard/reports/page.tsx app/dashboard/mailing-lists/page.tsx tests/*.mjs
+          ' 2>&1 | tee validation-evidence/frontend-checks.log
+
+      - name: Frontend isolated smoke and artifact inspection
+        run: |
+          set -euo pipefail
+          docker run -d --name clerk-frontend-smoke --network none clerk-frontend:local
+          trap 'docker rm -f clerk-frontend-smoke >/dev/null 2>&1 || true' EXIT
+          for attempt in {1..30}; do
+            if docker exec clerk-frontend-smoke node -e "fetch('http://127.0.0.1:3000/local-login', {signal: AbortSignal.timeout(2000)}).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"; then
+              break
+            fi
+            if [ "$attempt" = 30 ]; then exit 1; fi
+            sleep 1
+          done
+          docker exec -i clerk-frontend-smoke node --input-type=commonjs <<'JS' 2>&1 | tee validation-evidence/frontend-smoke.log
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const indicators = [/data:text\/javascript;base64/i, /eval\s*\(\s*atob\s*\(/i, /bsc-testnet[^\s"']*\.binance/i, /wintermute:8000/i, /https?:\/\/(?:localhost|127\.0\.0\.1):8000/i];
+          function inspect(text, label) {
+            for (const pattern of indicators) assert(!pattern.test(text), `Unexpected indicator in ${label}: ${pattern}`);
+          }
+          async function main() {
+            const base = 'http://127.0.0.1:3000';
+            const response = await fetch(`${base}/local-login`, {signal: AbortSignal.timeout(5000)});
+            assert.equal(response.status, 200);
+            const html = await response.text();
+            assert.match(html, /type="password"/);
+            inspect(html, 'login HTML');
+            const sources = [...html.matchAll(/<script\b[^>]*\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi)].map(m => m[1] ?? m[2] ?? m[3]);
+            assert(sources.length > 0, 'Expected Next.js static scripts');
+            for (const source of sources) {
+              assert.match(source, /^\/_next\/static\/[a-zA-Z0-9_./%-]+\.js(?:\?[^"'<>]*)?$/);
+              const url = new URL(source, base);
+              assert.equal(url.origin, base);
+              const asset = await fetch(url, {signal: AbortSignal.timeout(5000)});
+              assert.equal(asset.status, 200);
+              inspect(await asset.text(), 'static script');
+            }
+            let inspected = 0;
+            function walk(dir) {
+              for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+                const file = path.join(dir, entry.name);
+                if (entry.isDirectory()) walk(file);
+                else if (/\.(?:js|json|html)$/.test(file)) {
+                  inspect(fs.readFileSync(file, 'utf8'), file);
+                  inspected++;
+                }
+              }
+            }
+            walk('/app/.next');
+            const sharp = require('sharp');
+            const png = await sharp({create: {width: 2, height: 2, channels: 3, background: '#ffffff'}}).png().toBuffer();
+            assert.equal((await sharp(png).metadata()).width, 2);
+            console.log(`PASS: login HTML, ${sources.length} static scripts, ${inspected} artifacts, native Sharp synthetic image`);
+          }
+          main().catch(error => { console.error(error); process.exit(1); });
+          JS
+
+      - name: Backend runtime tools and startup logging regression
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --entrypoint sh clerk-backend:local -ec '
+            python -c "import fastapi, uvicorn, sqlalchemy, alembic, psycopg2, pydantic, boto3, paramiko"
+            xelatex --version
+            PYTHONDONTWRITEBYTECODE=1 python -m pytest --noconftest -p no:cacheprovider tests/test_startup_logging.py -q
+          ' 2>&1 | tee validation-evidence/backend-checks.log
+
+      - name: Backend network-disabled startup and health
+        run: |
+          set -euo pipefail
+          docker run -d --name clerk-backend-smoke --network none \
+            -e CLERK_ENV=production -e DEBUG=false \
+            -e SESSION_COOKIE_SECURE=true -e SESSION_COOKIE_SAMESITE=lax \
+            -e AUTH_SECRET_KEY=synthetic-amd64-validation-only-not-for-production \
+            -e CORS_ORIGINS='["https://clerk.mrrc.online"]' \
+            -e DATABASE_URL=sqlite:///:memory: -e DISABLE_AUTO_MIGRATE=true \
+            -e ENABLE_IONOS_ROSTER_PUBLISH=false -e AWS_EC2_METADATA_DISABLED=true \
+            clerk-backend:local
+          trap 'docker rm -f clerk-backend-smoke >/dev/null 2>&1 || true' EXIT
+          for attempt in {1..30}; do
+            if docker exec clerk-backend-smoke python -c 'import json, urllib.request; r = urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=2); assert r.status == 200; assert json.load(r) == {"status": "healthy"}'; then
+              echo 'PASS: normal backend startup and /health; no database queries or migrations' | tee validation-evidence/backend-smoke.log
+              break
+            fi
+            if [ "$attempt" = 30 ]; then exit 1; fi
+            sleep 1
+          done
+
+      - name: Record validation outcome
+        if: always()
+        env:
+          VALIDATION_STATUS: ${{ job.status }}
+        run: |
+          mkdir -p validation-evidence
+          if [ "$VALIDATION_STATUS" = success ]; then
+            message='AMD64 validation passed; not deployed.'
+          else
+            message="AMD64 validation $VALIDATION_STATUS; not deployed."
+          fi
+          echo "$message" | tee validation-evidence/result.txt >> "$GITHUB_STEP_SUMMARY"
+          echo 'No PostgreSQL connectivity, migrations, AWS or IONOS operations validated.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: amd64-validation-${{ github.sha }}-${{ github.run_attempt }}
+          path: validation-evidence/
+          retention-days: 14
 
   deploy-backend:
     name: Deploy Backend to App Runner
     runs-on: ubuntu-latest
-    needs: detect-changes
-    # Deploy backend if triggered manually with 'backend' or 'both', or if backend files changed
-    if: |
-      github.event_name == 'workflow_dispatch' && 
-      (github.event.inputs.deploy_target == 'backend' || github.event.inputs.deploy_target == 'both') ||
-      github.event_name == 'push' &&
-      (
-        needs.detect-changes.outputs.backend_changed == 'true' ||
-        needs.detect-changes.outputs.workflow_changed == 'true'
-      )
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy' &&
+      (inputs.deploy_target == 'backend' || inputs.deploy_target == 'both')
 
     steps:
       - name: Checkout code
@@ -173,16 +308,9 @@ jobs:
   deploy-frontend:
     name: Deploy Frontend to App Runner
     runs-on: ubuntu-latest
-    needs: detect-changes
-    # Deploy frontend if triggered manually with 'frontend' or 'both', or if frontend files changed
-    if: |
-      github.event_name == 'workflow_dispatch' && 
-      (github.event.inputs.deploy_target == 'frontend' || github.event.inputs.deploy_target == 'both') ||
-      github.event_name == 'push' &&
-      (
-        needs.detect-changes.outputs.frontend_changed == 'true' ||
-        needs.detect-changes.outputs.workflow_changed == 'true'
-      )
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy' &&
+      (inputs.deploy_target == 'frontend' || inputs.deploy_target == 'both')
 
     steps:
       - name: Checkout code
@@ -269,24 +397,41 @@ jobs:
           fi
 
   notify-completion:
-    name: Notify Deployment Status
-    runs-on: ubuntu-latest
-    needs: [deploy-backend, deploy-frontend]
+    name: Report validation or deployment outcome
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    needs: [validate-amd64, deploy-backend, deploy-frontend]
     if: always()
-
     steps:
-      - name: Check deployment results
+      - name: Report selected operation
+        env:
+          MODE: ${{ inputs.mode }}
+          TARGET: ${{ inputs.deploy_target }}
+          VALIDATION: ${{ needs.validate-amd64.result }}
+          BACKEND: ${{ needs.deploy-backend.result }}
+          FRONTEND: ${{ needs.deploy-frontend.result }}
         run: |
-          echo "==================================="
-          echo "Deployment Summary"
-          echo "==================================="
-          echo "Backend Status: ${{ needs.deploy-backend.result }}"
-          echo "Frontend Status: ${{ needs.deploy-frontend.result }}"
-          echo "==================================="
-
-          if [ "${{ needs.deploy-backend.result }}" == "failure" ] || [ "${{ needs.deploy-backend.result }}" == "cancelled" ] || [ "${{ needs.deploy-frontend.result }}" == "failure" ] || [ "${{ needs.deploy-frontend.result }}" == "cancelled" ]; then
-            echo "❌ One or more deployments failed"
-            exit 1
+          set -euo pipefail
+          if [ "$MODE" = validate ]; then
+            test "$BACKEND" = skipped
+            test "$FRONTEND" = skipped
+            if [ "$VALIDATION" = success ]; then
+              echo 'AMD64 validation passed; not deployed.' >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "AMD64 validation $VALIDATION; not deployed." >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+          elif [ "$MODE" = deploy ]; then
+            echo "Deployment results: backend=$BACKEND frontend=$FRONTEND" >> "$GITHUB_STEP_SUMMARY"
+            case "$TARGET" in
+              both) test "$BACKEND" = success; test "$FRONTEND" = success ;;
+              backend) test "$BACKEND" = success; test "$FRONTEND" = skipped ;;
+              frontend) test "$FRONTEND" = success; test "$BACKEND" = skipped ;;
+              *) exit 1 ;;
+            esac
+            echo 'Selected deployment jobs succeeded; AMD64 validation was not run in this invocation.' >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "✅ Deployment workflow completed without failures"
+            echo 'No valid operation selected; no success claimed.' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
