@@ -17,12 +17,14 @@ function harness(file, user, reply, exportName = 'default', options = {}) {
     let current = user, index = 0;
     let pathname = '/dashboard';
     const redirects = [];
+    const fullRedirects = [];
     const router = {replace: path => redirects.push(path), refresh() {}};
     const context = React.createContext(null);
     let authRequests = 0;
     const slots = [], effects = [], requests = [];
     const same = (a, b) => a && b && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
     const hooks = {...React,
+        useMemo(fn) { return fn(); },
         useState(initial) {
             const i = index++;
             if (!(i in slots)) slots[i] = initial;
@@ -50,7 +52,7 @@ function harness(file, user, reply, exportName = 'default', options = {}) {
         if (name === '@/lib/auth') return {getCurrentUser: async () => { authRequests++; return options.getCurrentUser ? options.getCurrentUser() : current; }};
         if (name === 'next/link') return {__esModule: true, default: ({children, href}) => React.createElement('a', {href}, children)};
         if (name === 'next/image') return {__esModule: true, default: stub};
-        if (name === 'next/navigation') return {usePathname: () => pathname, useRouter: () => router};
+        if (name === 'next/navigation') return {usePathname: () => pathname, useRouter: () => router, useSearchParams: () => new URLSearchParams(options.search || '')};
         if (name === '@/components/navigation' && options.Navigation) return {Navigation: options.Navigation};
         if (name === '@/components/modal') return {Modal: ({isOpen, children}) => isOpen ? React.createElement('section', null, children) : null};
         if (name === 'lucide-react' || name.startsWith('@/components/')) return new Proxy({}, {get: () => stub});
@@ -60,12 +62,13 @@ function harness(file, user, reply, exportName = 'default', options = {}) {
     const source = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
     const {outputText} = ts.transpileModule(source, {compilerOptions: {module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true}});
     const compiledModule = {exports: {}};
-    vm.runInNewContext(outputText, {module: compiledModule, exports: compiledModule.exports, require: mockedRequire, process: {env: {}}, console,
+    vm.runInNewContext(outputText, {module: compiledModule, exports: compiledModule.exports, require: mockedRequire, process: {env: {}}, console, Error,
         fetch: async (...args) => { requests.push(args); return reply(...args); },
+        window: {location: {replace: path => fullRedirects.push(path)}},
     }, {filename: file});
     const tree = () => { index = 0; return compiledModule.exports[exportName]({user: current, children: options.children}); };
     const render = () => renderToStaticMarkup(tree());
-    return {render, tree, context, requests, redirects, get authRequests() { return authRequests; },
+    return {render, tree, context, requests, redirects, fullRedirects, get authRequests() { return authRequests; },
         setPath(path) { pathname = path; }, setUser(user) { current = user; }, async settle() {
         for (let i = 0; i < 5; i++) {
             const html = render(), pending = effects.splice(0);
@@ -210,4 +213,65 @@ test('mutation 403 preserves accounts and displays administrator deactivation re
     assert.match(html, /All Users/);
     assert.doesNotMatch(html, /Access denied/);
     assert.equal(page.requests.length, 2);
+});
+
+function fillPasswordForm(page, overrides = {}) {
+    const values = {'current-password': 'old-password', 'new-password': 'new-password', 'confirm-password': 'new-password', ...overrides};
+    for (const [id, value] of Object.entries(values))
+        findElement(page.tree(), node => node.props?.id === id).props.onChange({target: {value}});
+}
+
+for (const user of [ordinary, admin]) {
+    for (const result of ['success', 'api-error', 'network-error']) {
+        test(`password ${result} for admin=${user.is_admin}`, async () => {
+            const page = harness('app/dashboard/profile/page.tsx', user, (url, options) => {
+                assert.equal(url, '/api/auth/change-password');
+                assert.equal(options.method, 'POST');
+                assert.equal(options.credentials, 'include');
+                assert.deepEqual(JSON.parse(options.body), {current_password: 'old-password', new_password: 'new-password', confirm_password: 'new-password'});
+                if (result === 'network-error') throw new Error('Network unavailable');
+                return {ok: result === 'success', json: async () => ({detail: 'Current password is incorrect'})};
+            });
+            assert.match(await page.settle(), /synthetic@example.invalid/);
+            fillPasswordForm(page);
+            await findElement(page.tree(), n => n.type === 'form').props.onSubmit({preventDefault() {}});
+            assert.deepEqual(page.redirects, [], 'must discard document rather than retain router caches');
+            if (result === 'success') {
+                assert.deepEqual(page.fullRedirects, ['/local-login?passwordChanged=1']);
+                assert.doesNotMatch(page.render(), /synthetic@example.invalid/);
+                for (const id of ['current-password', 'new-password', 'confirm-password'])
+                    assert.equal(findElement(page.tree(), n => n.props?.id === id).props.value, '');
+            } else {
+                assert.deepEqual(page.fullRedirects, []);
+                assert.match(page.render(), /synthetic@example.invalid/);
+                assert.match(page.render(), result === 'api-error' ? /Current password is incorrect/ : /Network unavailable/);
+                assert.equal(findElement(page.tree(), n => n.props?.id === 'current-password').props.value, 'old-password');
+            }
+        });
+    }
+}
+
+for (const [overrides, message] of [
+    [{'current-password': ''}, /are required/],
+    [{'new-password': 'short'}, /at least 8 characters/],
+    [{'confirm-password': 'different'}, /do not match/],
+]) {
+    test(`password validation remains local: ${message}`, async () => {
+        const page = harness('app/dashboard/profile/page.tsx', ordinary, () => assert.fail('Invalid form must not send a request'));
+        await page.settle();
+        fillPasswordForm(page, overrides);
+        await findElement(page.tree(), n => n.type === 'form').props.onSubmit({preventDefault() {}});
+        assert.match(page.render(), message);
+        assert.match(page.render(), /synthetic@example.invalid/);
+        assert.deepEqual(page.fullRedirects, []);
+    });
+}
+
+test('login shows password confirmation only for the success flag', () => {
+    for (const search of ['', 'passwordChanged=0', 'passwordChanged=unexpected'])
+        assert.doesNotMatch(harness('app/local-login/page.tsx', null, null, 'default', {search}).render(), /Password changed/);
+    const html = harness('app/local-login/page.tsx', null, null, 'default', {search: 'passwordChanged=1'}).render();
+    assert.match(html, /role="status"/);
+    assert.match(html, /Password changed. Please sign in again./);
+    assert.match(html, /type="password"/);
 });

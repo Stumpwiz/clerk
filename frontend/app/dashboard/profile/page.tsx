@@ -3,7 +3,6 @@
 import {useEffect, useState} from "react";
 import type {LocalUser} from "@/lib/auth";
 import {getCurrentUser} from "@/lib/auth";
-import {Toast} from "@/components/toast";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -40,10 +39,6 @@ export default function ProfilePage() {
     const [passwordForm, setPasswordForm] = useState<PasswordFormData>(emptyPasswordForm);
     const [passwordError, setPasswordError] = useState<string | null>(null);
     const [submittingPassword, setSubmittingPassword] = useState(false);
-    const [toast, setToast] = useState<{
-        message: string;
-        type: "success" | "error";
-    } | null>(null);
 
     useEffect(() => {
         let isMounted = true;
@@ -102,7 +97,9 @@ export default function ProfilePage() {
             }
 
             setPasswordForm(emptyPasswordForm);
-            setToast({message: "Password changed successfully.", type: "success"});
+            setUser(null);
+            // A full navigation discards the shell's cached user and router state.
+            window.location.replace("/local-login?passwordChanged=1");
         } catch (error) {
             setPasswordError(error instanceof Error ? error.message : "Failed to change password");
         } finally {
@@ -207,13 +204,6 @@ export default function ProfilePage() {
                 </form>
             </div>
 
-            {toast && (
-                <Toast
-                    message={toast.message}
-                    type={toast.type}
-                    onClose={() => setToast(null)}
-                />
-            )}
         </div>
     );
 }
