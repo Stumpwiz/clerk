@@ -3,10 +3,14 @@
 import builtins
 from concurrent.futures import ThreadPoolExecutor
 import os
+import pty
+import select
+import signal
 from pathlib import Path
 import subprocess
 import sys
 from threading import Barrier
+import time
 import warnings
 from unittest.mock import Mock
 
@@ -262,6 +266,56 @@ def test_getpass_warning_is_an_error(monkeypatch):
     monkeypatch.setattr(recovery.getpass, "getpass", fallback)
     with pytest.raises(recovery.getpass.GetPassWarning):
         recovery.prompt_password()
+
+
+def test_real_terminal_password_prompt_does_not_echo():
+    # A real controlling terminal is essential: mocking open() concealed the
+    # BufferedRandom/seekability failure of open('/dev/tty', 'r+').
+    pid, terminal = pty.fork()
+    if pid == 0:
+        try:
+            password = recovery.prompt_password()
+            os._exit(0 if password == CANARY else 2)
+        except BaseException:
+            os._exit(1)
+    output = b""
+    sent = False
+    status = None
+    deadline = time.monotonic() + 5
+    try:
+        while time.monotonic() < deadline:
+            if select.select([terminal], [], [], 0.05)[0]:
+                try:
+                    chunk = os.read(terminal, 4096)
+                except OSError:
+                    chunk = b""
+                output += chunk
+                if not sent and b"Database password: " in output:
+                    os.write(terminal, CANARY.encode() + b"\n")
+                    sent = True
+            finished, status_value = os.waitpid(pid, os.WNOHANG)
+            if finished:
+                status = status_value
+                break
+        # Drain anything queued before exit so the no-echo assertion also
+        # covers a child that finishes between sending input and the next read.
+        while select.select([terminal], [], [], 0)[0]:
+            try:
+                chunk = os.read(terminal, 4096)
+            except OSError:
+                break
+            if not chunk:
+                break
+            output += chunk
+        assert status is not None, "Password prompt timed out"
+        assert os.waitstatus_to_exitcode(status) == 0, "Real terminal password prompt failed"
+        assert sent
+        assert CANARY.encode() not in output
+    finally:
+        if status is None:
+            os.kill(pid, signal.SIGKILL)
+            os.waitpid(pid, 0)
+        os.close(terminal)
 
 
 def test_cli_success_is_sanitized(engine, monkeypatch, capsys):

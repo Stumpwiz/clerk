@@ -42,7 +42,10 @@ class RecoveryRefused(Exception):
 
 def prompt_password():
     # Refuse getpass's echoed-stdin fallback, including redirected invocations.
-    with open("/dev/tty", "r+"):
+    # This is only an availability check. Update mode (r+) uses a seekable
+    # BufferedRandom stream, which terminals do not support. getpass separately
+    # opens the terminal for its hidden-input handling.
+    with open("/dev/tty", "r"):
         pass
     with warnings.catch_warnings():
         warnings.simplefilter("error", getpass.GetPassWarning)
