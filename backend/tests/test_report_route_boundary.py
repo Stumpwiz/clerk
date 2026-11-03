@@ -13,6 +13,7 @@ def route_client(monkeypatch):
 
     # Never load local credentials or connect to a database for these tests.
     monkeypatch.setattr(DotEnvSettingsSource, "_read_env_files", lambda self: {})
+    monkeypatch.setenv("CLERK_ENV", "test")
     monkeypatch.setenv("DATABASE_URL", "sqlite+pysqlite:///:memory:")
 
     def forbid_connection(*args, **kwargs):
@@ -36,6 +37,7 @@ def route_client(monkeypatch):
         email="route-test@example.invalid",
         display_name="Synthetic User",
         is_active=True,
+        session_version=0,
     )
 
     class SyntheticSession:
@@ -87,7 +89,7 @@ def test_legitimate_report_routes_require_authentication(route_client):
         route.path for route in app.routes
         if route.path.startswith("/api/reports") and "GET" in route.methods
     }
-    assert {"/api/reports", "/api/reports/pdfs", "/api/reports/long-roster"} <= paths
+    assert {"/api/reports", "/api/reports/pdfs"} <= paths
     for path in sorted(paths):
         response = client.get(path.replace("{filename}", "synthetic.pdf"))
         assert response.status_code == 401, path

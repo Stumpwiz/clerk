@@ -23,12 +23,20 @@ non-Secure cookies but do not disable Origin enforcement. Browser fetch sends
 Origin on mutations. Command-line mutation clients must supply an approved
 Origin as well as satisfy normal authentication and authorization.
 
-## Restoration blocker: Step 3C-2
+## File generation: Step 3C-2
 
-File-generating GET routes in `app/routers/reports.py` and
-`app/routers/mailing_lists.py` remain unchanged and are not protected by the
-unsafe-method guard. Short-roster generation can also publish to IONOS when
-enabled. Step 3C-1 alone is not sufficient for restoration. Step 3C-2 must cover
-these side effects and their frontend callers while preserving read-only
-metadata and existing-file downloads. Production services remain paused;
-this document does not authorize restoration.
+The nine report-generation routes and `/api/mailing-lists/{list_id}` now require
+POST, authentication, and a trusted Origin. Their old GET methods return 405
+without generation or publication. Short-roster publication remains conditional
+on its existing enable flag and is covered by the POST guard. Metadata and
+existing-document downloads remain GET. Mailing-list View deliberately regenerates
+via POST, preserving its prior behavior.
+
+Focused synthetic tests with stubbed generation/publication verify this boundary;
+this resolves the generating-GET blocker in the local implementation only. Deploy
+the matching frontend/backend changes together; old generation bookmarks and GET
+clients will receive 405. No live rendering or publication was validated.
+
+Production configuration validation and secret-safe signing-key rotation remain
+recovery prerequisites. Do not use `scripts/update_apprunner_env.py` unchanged.
+Production services remain paused; this document does not authorize restoration.

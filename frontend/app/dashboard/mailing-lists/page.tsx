@@ -69,6 +69,7 @@ export default function MailingListsPage() {
 
         try {
             const response = await fetch(`${API_BASE_URL}${list.endpoint}`, {
+                method: 'POST',
                 credentials: 'include',
             });
             if (!response.ok) {
@@ -100,6 +101,7 @@ export default function MailingListsPage() {
 
         try {
             const response = await fetch(`${API_BASE_URL}${selected.endpoint}?_=${Date.now()}`, {
+                method: 'POST',
                 credentials: 'include',
             });
             if (!response.ok) {

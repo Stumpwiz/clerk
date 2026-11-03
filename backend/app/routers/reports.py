@@ -390,7 +390,7 @@ async def serve_report_file(filename: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/long-roster")
+@router.post("/long-roster")
 async def generate_long_roster(db: Session = Depends(get_db)):
     """Generate long form roster with full details"""
     try:
@@ -402,7 +402,7 @@ async def generate_long_roster(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/short-roster")
+@router.post("/short-roster")
 async def generate_short_roster(db: Session = Depends(get_db)):
     """Generate short form roster (names and offices only)"""
     try:
@@ -414,7 +414,7 @@ async def generate_short_roster(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/vacancies")
+@router.post("/vacancies")
 async def generate_vacancies_report(db: Session = Depends(get_db)):
     """Generate report of vacant positions"""
     try:
@@ -451,7 +451,7 @@ async def get_vacancies_data(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/expirations")
+@router.post("/expirations")
 async def generate_expirations_report(db: Session = Depends(get_db)):
     """Generate report of terms expiring this year"""
     try:
@@ -462,7 +462,7 @@ async def generate_expirations_report(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/terms-report")
+@router.post("/terms-report")
 async def generate_terms_report(db: Session = Depends(get_db)):
     """Generate report of all terms with actual expiration dates"""
     try:
@@ -473,7 +473,7 @@ async def generate_terms_report(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/rc-officers")
+@router.post("/rc-officers")
 async def generate_rc_officers_email_list(db: Session = Depends(get_db)):
     """Legacy compatibility endpoint for Residents Council officers email list"""
     try:
@@ -489,7 +489,7 @@ async def generate_rc_officers_email_list(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/rc-officers-and-chairs")
+@router.post("/rc-officers-and-chairs")
 async def generate_rc_officers_and_chairs_email_list(db: Session = Depends(get_db)):
     """Legacy compatibility endpoint; now returns committee chairs only"""
     try:
@@ -513,7 +513,7 @@ def _get_hall_reps_emails(db: Session) -> List[str]:
     return get_hall_reps_emails(db)
 
 
-@router.get("/committee-secretaries")
+@router.post("/committee-secretaries")
 async def generate_committee_secretaries_email_list(db: Session = Depends(get_db)):
     """Legacy compatibility endpoint for committee secretaries email list"""
     try:
@@ -529,7 +529,7 @@ async def generate_committee_secretaries_email_list(db: Session = Depends(get_db
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/hall-reps")
+@router.post("/hall-reps")
 async def generate_hall_reps_email_list(db: Session = Depends(get_db)):
     """Legacy compatibility endpoint for hall reps email list"""
     try:
