@@ -1,0 +1,108 @@
+CLERK BACKEND CUTOVER — PREPARATION ONLY
+
+execute_backend_cutover.py is the backend-only adapter. Without its explicit
+execution flag it makes no AWS calls. backend_cutover.py remains the injected
+core. Never run the older
+update_apprunner_env.py or deploy_to_aws.py for this cutover.
+
+LATER AUTHORIZED EXECUTION (not authorized by local preparation)
+From /home/geo/Projects/Python/clerk:
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/execute_backend_cutover.py --execute-approved-cutover
+Run once in a dedicated terminal; do not use shell tracing or automatic retries.
+Exit 0 means configuration and health verified; exit 1 requires inspection of
+the fixed containment result before further action. No flag or --help is inert.
+
+APPROVAL GATES
+1. Explicitly authorize an executor to retrieve DescribeService into process
+   memory before and after the update. These responses contain plaintext runtime
+   credentials. No response, request, exception, traceback, or environment dump
+   may be printed or persisted. DATABASE_URL must be preserved exactly.
+2. Explicitly authorize ResumeService, one UpdateService, HTTPS health probes,
+   and PauseService on failure; accept the old backend's unavoidable runtime
+   window. Backend only. Frontend remains paused.
+3. Approve a fresh 48-random-byte signing key delivered as a runtime variable.
+   It is generated immediately before resume, never put in source/arguments/files,
+   and retained by App Runner. This does NOT migrate secrets to Secrets Manager.
+   No key is created during preparation. AWS administrator access can still read
+   runtime variables. Do not enable SDK/HTTP wire logging or process core dumps.
+
+BEFORE RESUME (all work prepared before exposure)
+- Use a dedicated executor process with logging disabled before creating SDK
+  clients, no debugger or shell tracing, no core dumps, and no exception traceback
+  handler. Catch CutoverError and print only its fixed message. Do not inspect
+  exception context. Do not persist configuration, including for rollback.
+- Create SDK clients in us-east-1 with connect_timeout=5, read_timeout=15,
+  retries={'total_max_attempts': 1}. No automatic retry of mutations.
+- Verify STS account 365591166807 and approved identity.
+- Adapter verifies the exact reviewed digest exists in ECR clerk-backend:
+  sha256:85b15c42d701b7b17cabf88412fbc3e6aa437c18cd7467eb8e661dda44a7d8a5.
+  The prior AMD64 verification is supplied evidence; the adapter does not rebuild
+  or pull the image, or rely on a mutable tag mapping.
+- Confirm backend PAUSED and no pending/in-progress/rollback operation.
+- Retrieve DescribeService only into memory under gate 1. Validate existing
+  manual deployment, ECR source ending :latest, the exact backend ARN, and
+  DATABASE_URL in exactly one of runtime variables or secret references.
+- Confirm existing ECR access role works and existing network/instance/health
+  settings are appropriate. Preserve all of them. Do not silently fix drift.
+- Use local botocore.validate.validate_parameters on the prepared update before
+  any resume (no request/validation exception dump). Confirm required
+  ImageIdentifier and ImageRepositoryType, access role, port and start command.
+  The core validates the prepared request before any resume.
+
+EXECUTION ORDER
+- The adapter invokes restore(client, original_service, bounded_health_callback)
+  once after identity, state, operations, digest and service-identity preflight.
+- It prepares a deep-copied SourceConfiguration and fresh key in memory; it changes
+  only ImageIdentifier and the eight approved runtime names (seven settings plus
+  AUTH_SECRET_KEY), removing conflicting secret references for those names.
+- It submits ResumeService once, then polls that exact operation ID to SUCCEEDED
+  and confirms RUNNING. It immediately submits one UpdateService containing the
+  image and runtime changes together. No StartDeployment call.
+- ImageIdentifier uses the verified repository@sha256:digest, not mutable :latest.
+- UpdateService omits networking, health checks, instance settings, scaling,
+  encryption, observability and unrelated service fields, preserving them.
+- Poll the exact update operation ID to SUCCEEDED, then verify RUNNING, exact
+  desired source configuration and unchanged unrelated settings in memory.
+- health callback: GET https://api.mrrc.online/health with TLS verification,
+  redirects disabled, bounded response size, 5-second request timeout, and a
+  total deadline of 60 seconds enforced by a main-thread alarm. It accepts at
+  most 4096 response bytes, ignores proxy environment, and requires HTTP 200
+  and JSON {"status":"healthy"}.
+  Return True only on success; never print raw body or HTTP exception details.
+  Do not query resident data or test login/passwords as part of this operation.
+- Print only operation IDs, digest, and fixed pass/fail labels. /health alone does
+  not establish database authorization or full application functionality.
+
+FAILURE AND TIMEOUT
+- Any exception after a resume attempt (including an ambiguous network timeout
+  or KeyboardInterrupt) enters containment. Never blindly retry the update.
+- Pause immediately if RUNNING; if an operation is still in progress, wait until
+  a pause is permitted. Confirm the pause operation succeeded AND status PAUSED.
+- Default operation deadline: 15 minutes each. Separate containment deadline:
+  15 minutes. These are maximum waits, not promised restoration times.
+- If containment is unconfirmed, stop automation and escalate to the operator
+  for status/operation inspection and an authorized pause as soon as allowed.
+  Do not claim the service is stopped. A killed process cannot run containment.
+- Never restore the vulnerable image, restore the database snapshot, rotate the
+  database password, resume the frontend, or retry restoration automatically.
+- Failed updates can roll back to the old source. Pause is containment, not a
+  guarantee that the old source stopped serving before the pause completes.
+
+PERMISSIONS / UNVERIFIED DETAILS
+- Executor: sts:GetCallerIdentity; ecr:DescribeImages (and BatchGetImage if
+  inspecting manifests); apprunner:ListServices, ListOperations, DescribeService,
+  ResumeService, UpdateService, PauseService. iam:PassRole may be required for
+  the preserved access role when resubmitting SourceConfiguration.
+- Existing App Runner ECR access role must permit image retrieval; preserve the
+  instance role and any permissions for existing referenced secrets.
+- Direct runtime-key handling adds no Secrets Manager/KMS permission dependency.
+- Current live configuration, IAM authorization, image identity and health route
+  have not been checked during preparation. No production readiness claim.
+- Existing old backend startup behavior still runs on resume; new settings such
+  as DISABLE_AUTO_MIGRATE only take effect on the subsequent update. Keeping the
+  frontend paused does not block direct requests to the old backend API.
+
+LOCAL VALIDATION
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s scripts/tests -p 'test_*cutover.py' -v
+Only synthetic configuration and mocked client responses; no AWS clients or HTTP
+connections. Separate execution authorization remains required before live use.
