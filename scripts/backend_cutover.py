@@ -30,6 +30,10 @@ class CutoverError(Exception):
     """Only static, secret-free messages may cross this boundary."""
 
 
+class ResumeStatusTimeout(CutoverError):
+    """Resume succeeded, but RUNNING was not observed within its deadline."""
+
+
 class Diagnostics:
     """Keep only sanitized strings in memory; never retain exception objects."""
     STAGES = frozenset({
@@ -71,6 +75,8 @@ class Diagnostics:
             candidate = detail.get('Code') if isinstance(detail, dict) else None
             if isinstance(candidate, str) and candidate in self.AWS_CODES:
                 code = candidate
+        elif isinstance(error, ResumeStatusTimeout):
+            code = 'resume_running_timeout'
         elif isinstance(error, CutoverError):
             code = 'local_failure'
         self.lines.append('failure: stage=' + self.current + ' code=' + code)
@@ -161,6 +167,27 @@ def status(client, *, clock=time.monotonic, timeout=60, deadline=None):
     raise CutoverError('Service not found.')
 
 
+def wait_running(client, *, clock, sleep, deadline, status_reader=None):
+    """Wait for summary convergence within the original resume deadline.
+
+    Missing services, API errors and malformed pagination still fail closed.
+    The frontend supplies its own ARN-bound reader; no service target is changed.
+    """
+    status_reader = status if status_reader is None else status_reader
+    try:
+        while True:
+            check_deadline(clock, deadline)
+            state = status_reader(client, clock=clock, deadline=deadline)
+            check_deadline(clock, deadline)
+            if state == 'RUNNING':
+                return
+            sleep(min(5, max(0, deadline - clock())))
+    except CutoverError:
+        if clock() >= deadline:
+            raise ResumeStatusTimeout('Resume RUNNING deadline exceeded.') from None
+        raise
+
+
 def contain(client, *, clock, sleep, timeout, known_operations=(), uncertain=False,
             diagnostics=None):
     """Never infer rejection of a lost mutation response from an empty list.
@@ -227,8 +254,7 @@ def restore(client, service, health, *, clock=time.monotonic, sleep=time.sleep,
         uncertain = False
         check_deadline(clock, deadline)
         wait_operation(client, operation, clock=clock, sleep=sleep, deadline=deadline)
-        if status(client, clock=clock, deadline=deadline) != 'RUNNING':
-            raise CutoverError('Resume state mismatch.')
+        wait_running(client, clock=clock, sleep=sleep, deadline=deadline)
         diagnostics.stage('resume completed')
         deadline = clock() + timeout
         uncertain = True

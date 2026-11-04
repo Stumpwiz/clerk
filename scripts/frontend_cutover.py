@@ -145,8 +145,8 @@ def restore(client, service, health, *, clock=time.monotonic, sleep=time.sleep,
         uncertain = False
         check_deadline(clock, deadline)
         wait_operation(client, operation, clock=clock, sleep=sleep, deadline=deadline)
-        if status(client, clock=clock, deadline=deadline) != 'RUNNING':
-            raise CutoverError('Resume state mismatch.')
+        shared.wait_running(client, clock=clock, sleep=sleep, deadline=deadline,
+                            status_reader=status)
         diagnostics.stage('resume completed')
         deadline = clock() + timeout
         uncertain = True
