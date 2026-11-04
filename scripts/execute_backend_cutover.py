@@ -22,8 +22,11 @@ SAFE_ERRORS = {
 }
 
 
-def execute(sts, ecr, apprunner, health, *, clock=time.monotonic, sleep=time.sleep):
+def execute(sts, ecr, apprunner, health, *, clock=time.monotonic, sleep=time.sleep,
+            diagnostics=None):
     """All dependencies injected: synthetic tests never construct live clients."""
+    diagnostics = diagnostics if diagnostics is not None else core.Diagnostics()
+    diagnostics.stage('preflight')
     try:
         identity = sts.get_caller_identity()
         if identity['Account'] != ACCOUNT or identity['Arn'].split(':')[4] != ACCOUNT:
@@ -42,9 +45,11 @@ def execute(sts, ecr, apprunner, health, *, clock=time.monotonic, sleep=time.sle
         service = apprunner.describe_service(ServiceArn=core.ARN)['Service']
         if service['ServiceArn'] != core.ARN or service['ServiceName'] != 'clerk-backend':
             raise ValueError()
-    except BaseException:
+    except BaseException as error:
+        diagnostics.failure(error)
         raise core.CutoverError('Preflight failed; no mutation attempted.') from None
-    return core.restore(apprunner, service, health, clock=clock, sleep=sleep)
+    return core.restore(apprunner, service, health, clock=clock, sleep=sleep,
+                        diagnostics=diagnostics)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -108,6 +113,7 @@ def main(argv=None, *, client_factory=live_clients, health=health_check):
         return 0
     result = None
     error = None
+    diagnostics = core.Diagnostics()
     old_sigterm = signal.getsignal(signal.SIGTERM)
     def interrupted(*_):
         raise KeyboardInterrupt()
@@ -118,13 +124,16 @@ def main(argv=None, *, client_factory=live_clients, health=health_check):
         signal.signal(signal.SIGTERM, interrupted)
         with open('/dev/null', 'w') as sink, contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
             clients = client_factory()
-            result = execute(*clients, health)
+            result = execute(*clients, health, diagnostics=diagnostics)
     except core.CutoverError as exc:
         error = str(exc) if str(exc) in SAFE_ERRORS else 'Cutover failed; containment UNCONFIRMED. Operator action required.'
-    except BaseException:
+    except BaseException as unexpected:
+        diagnostics.failure(unexpected)
         error = 'Executor failed; inspect backend status before any further action.'
     finally:
         signal.signal(signal.SIGTERM, old_sigterm)
+    for line in diagnostics.lines:
+        print(line)
     if error:
         print(error)
         return 1

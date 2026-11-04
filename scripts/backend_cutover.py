@@ -8,6 +8,8 @@ connect/read timeouts. A future executor must disable SDK debug logging/core dum
 from copy import deepcopy
 import secrets
 import time
+import re
+from botocore.exceptions import ClientError
 from botocore.session import Session
 from botocore.validate import validate_parameters
 
@@ -26,6 +28,52 @@ SETTINGS = {
 
 class CutoverError(Exception):
     """Only static, secret-free messages may cross this boundary."""
+
+
+class Diagnostics:
+    """Keep only sanitized strings in memory; never retain exception objects."""
+    STAGES = frozenset({
+        'preflight', 'configuration prepared', 'resume requested', 'resume completed',
+        'update requested', 'update accepted', 'update completed', 'health verified',
+        'containment requested', 'containment completed', 'containment unconfirmed',
+    })
+    AWS_CODES = frozenset({
+        'AccessDenied', 'AccessDeniedException', 'InvalidRequestException',
+        'InvalidStateException', 'InvalidParameterException', 'ValidationException',
+        'ResourceNotFoundException', 'ImageNotFoundException', 'RepositoryNotFoundException',
+        'InternalServiceErrorException', 'InternalServiceError', 'ServiceUnavailableException',
+        'ThrottlingException', 'Throttling', 'TooManyRequestsException',
+        'ExpiredToken', 'ExpiredTokenException', 'UnrecognizedClientException',
+    })
+
+    def __init__(self):
+        self.current = 'preflight'
+        self.lines = []
+
+    def stage(self, name):
+        if name in self.STAGES:
+            self.current = name
+            self.lines.append('stage: ' + name)
+
+    def operation(self, kind, identifier):
+        if kind not in ('resume', 'update', 'pause'):
+            return
+        valid = (isinstance(identifier, str) and re.fullmatch(
+            r'(?:[0-9a-f]{32}|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})', identifier))
+        self.lines.append('operation: ' + kind + ' id=' + (identifier if valid else 'unavailable'))
+
+    def failure(self, error):
+        code = 'unexpected_error'
+        if isinstance(error, ClientError):
+            code = 'aws_error_unlisted'
+            response = error.response
+            detail = response.get('Error') if isinstance(response, dict) else None
+            candidate = detail.get('Code') if isinstance(detail, dict) else None
+            if isinstance(candidate, str) and candidate in self.AWS_CODES:
+                code = candidate
+        elif isinstance(error, CutoverError):
+            code = 'local_failure'
+        self.lines.append('failure: stage=' + self.current + ' code=' + code)
 
 
 def prepare(service):
@@ -113,7 +161,8 @@ def status(client, *, clock=time.monotonic, timeout=60, deadline=None):
     raise CutoverError('Service not found.')
 
 
-def contain(client, *, clock, sleep, timeout, known_operations=(), uncertain=False):
+def contain(client, *, clock, sleep, timeout, known_operations=(), uncertain=False,
+            diagnostics=None):
     """Never infer rejection of a lost mutation response from an empty list.
 
     A request without an operation ID remains uncertain for this invocation.
@@ -136,6 +185,8 @@ def contain(client, *, clock, sleep, timeout, known_operations=(), uncertain=Fal
             check_deadline(clock, deadline)
             pause_attempted = True  # Never retry an ambiguous pause request.
             operation = client.pause_service(ServiceArn=ARN)['OperationId']
+            if diagnostics is not None:
+                diagnostics.operation('pause', operation)
             if not isinstance(operation, str) or not operation:
                 raise CutoverError('Containment unconfirmed.')
             known.add(operation)
@@ -147,7 +198,7 @@ def contain(client, *, clock, sleep, timeout, known_operations=(), uncertain=Fal
 
 
 def restore(client, service, health, *, clock=time.monotonic, sleep=time.sleep,
-            timeout=900):
+            timeout=900, diagnostics=None):
     """Injected client and bounded health callback only; no automatic live adapter.
 
     Caller verifies STS account, ECR tag/digest, IAM, no active operation, and
@@ -156,16 +207,20 @@ def restore(client, service, health, *, clock=time.monotonic, sleep=time.sleep,
     response bodies, using bounded request timeouts and no redirects.
     """
     touched = False
+    diagnostics = diagnostics if diagnostics is not None else Diagnostics()
     uncertain = False
     known_operations = []
     try:
         request = prepare(service)  # Generate key and prepare everything before resume.
+        diagnostics.stage('configuration prepared')
         if status(client, clock=clock, timeout=timeout) != 'PAUSED':
             raise CutoverError('State changed before resume.')
         deadline = clock() + timeout
         touched = True  # A timeout can hide a successful resume request.
         uncertain = True
+        diagnostics.stage('resume requested')
         operation = client.resume_service(ServiceArn=ARN)['OperationId']
+        diagnostics.operation('resume', operation)
         if not isinstance(operation, str) or not operation:
             raise CutoverError('Missing operation identity.')
         known_operations.append(operation)
@@ -174,15 +229,20 @@ def restore(client, service, health, *, clock=time.monotonic, sleep=time.sleep,
         wait_operation(client, operation, clock=clock, sleep=sleep, deadline=deadline)
         if status(client, clock=clock, deadline=deadline) != 'RUNNING':
             raise CutoverError('Resume state mismatch.')
+        diagnostics.stage('resume completed')
         deadline = clock() + timeout
         uncertain = True
+        diagnostics.stage('update requested')
         operation = client.update_service(**request)['OperationId']
+        diagnostics.operation('update', operation)
         if not isinstance(operation, str) or not operation:
             raise CutoverError('Missing operation identity.')
         known_operations.append(operation)
         uncertain = False
+        diagnostics.stage('update accepted')
         check_deadline(clock, deadline)
         wait_operation(client, operation, clock=clock, sleep=sleep, deadline=deadline)
+        diagnostics.stage('update completed')
         check_deadline(clock, deadline)
         current = client.describe_service(ServiceArn=ARN)['Service']
         check_deadline(clock, deadline)
@@ -195,13 +255,20 @@ def restore(client, service, health, *, clock=time.monotonic, sleep=time.sleep,
                 raise CutoverError('Unrelated configuration changed.')
         if health() is not True:
             raise CutoverError('Health verification failed.')
+        diagnostics.stage('health verified')
         return {'result': 'verified', 'update_operation_id': operation, 'image': IMAGE}
-    except BaseException:
+    except BaseException as error:
+        diagnostics.failure(error)
         if touched:
+            diagnostics.stage('containment requested')
             try:
                 contain(client, clock=clock, sleep=sleep, timeout=timeout,
-                        known_operations=known_operations, uncertain=uncertain)
-            except BaseException:
+                        known_operations=known_operations, uncertain=uncertain,
+                        diagnostics=diagnostics)
+            except BaseException as containment_error:
+                diagnostics.failure(containment_error)
+                diagnostics.stage('containment unconfirmed')
                 raise CutoverError('Cutover failed; containment UNCONFIRMED. Operator action required.') from None
+            diagnostics.stage('containment completed')
             raise CutoverError('Cutover failed; backend PAUSED.') from None
         raise CutoverError('Preflight failed; no mutation attempted.') from None

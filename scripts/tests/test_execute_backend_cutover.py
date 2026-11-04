@@ -98,7 +98,10 @@ class ExecutorTests(TestCase):
             with contextlib.redirect_stdout(output),contextlib.redirect_stderr(output):
                 code=adapter.main(['--execute-approved-cutover'],client_factory=factory,health=health)
         self.assertEqual(code,1)
-        self.assertEqual(output.getvalue(),'Cutover failed; backend PAUSED.\n')
+        self.assertTrue(output.getvalue().endswith('Cutover failed; backend PAUSED.\n'))
+        self.assertIn('failure: stage=update completed code=unexpected_error', output.getvalue())
+        self.assertIn('stage: containment completed', output.getvalue())
+        self.assertNotIn('sensitive-canary', output.getvalue())
 
     def test_http_success_and_bad_responses(self):
         for body,status,expected in [(b'{"status":"healthy"}',200,True),(b'bad',200,False),
@@ -166,3 +169,140 @@ class ExecutorTests(TestCase):
         self.assertEqual(str(error.exception),'Cutover failed; backend PAUSED.')
         c.update_service.assert_not_called()
         c.pause_service.assert_called_once()
+
+
+class DiagnosticTests(TestCase):
+    def clients(self):
+        clients = ExecutorTests().clients()
+        runner = clients[2]
+        self.ids = {'resume': '1'*32, 'update': '2'*32, 'pause': '3'*32}
+        for name in ('resume', 'update', 'pause'):
+            method = getattr(runner, name+'_service')
+            original = method.side_effect
+            def mapped(original=original, name=name, **kwargs):
+                result = original(**kwargs)
+                return dict(result, OperationId=self.ids[name])
+            method.side_effect = mapped
+        original_list = runner.list_operations.side_effect
+        runner.list_operations.side_effect = lambda **kwargs: {'OperationSummaryList':[
+            dict(op, Id=self.ids[op['Id']]) for op in original_list(**kwargs)['OperationSummaryList']]}
+        return clients
+
+    def run_case(self, clients, health=lambda:True):
+        diagnostic = adapter.core.Diagnostics(); clock = core_tests.Clock()
+        try:
+            adapter.execute(*clients, health, clock=clock, sleep=clock.sleep, diagnostics=diagnostic)
+        except adapter.core.CutoverError:
+            pass
+        return diagnostic.lines
+
+    def test_success_stages_and_operation_ids(self):
+        clients = self.clients()
+        lines = self.run_case(clients)
+        self.assertEqual([s for s in lines if s.startswith('stage:')], [
+            'stage: preflight', 'stage: configuration prepared', 'stage: resume requested',
+            'stage: resume completed', 'stage: update requested', 'stage: update accepted',
+            'stage: update completed', 'stage: health verified'])
+        for name in ('resume','update'):
+            self.assertIn('operation: '+name+' id='+self.ids[name],lines)
+            getattr(clients[2],name+'_service').assert_called_once()
+        clients[2].pause_service.assert_not_called()
+        clients[2].start_deployment.assert_not_called()
+
+    def test_submission_failure_stages_with_allowlisted_aws_code(self):
+        from botocore.exceptions import ClientError
+        for action, stage in [('get_caller_identity','preflight'), ('resume_service','resume requested'),
+                              ('update_service','update requested')]:
+            with self.subTest(action=action):
+                clients=self.clients()
+                target=clients[0] if action=='get_caller_identity' else clients[2]
+                getattr(target,action).side_effect=ClientError(
+                    {'Error': {'Code':'AccessDeniedException','Message':'sensitive-canary'},
+                     'Request':'sensitive-canary'}, 'sensitive-canary')
+                lines=self.run_case(clients)
+                self.assertIn('failure: stage='+stage+' code=AccessDeniedException', lines)
+                self.assertNotIn('sensitive-canary','\n'.join(lines))
+                getattr(target,action).assert_called_once()
+                if action=='get_caller_identity': clients[2].resume_service.assert_not_called()
+                if action=='resume_service': clients[2].update_service.assert_not_called()
+                if action=='update_service':
+                    self.assertNotIn('stage: update accepted',lines)
+                    self.assertIn('stage: containment unconfirmed',lines)
+                    clients[2].pause_service.assert_called_once()
+
+    def test_poll_verification_and_containment_failures(self):
+        from botocore.exceptions import ClientError
+        for stage in ('configuration prepared','resume requested','update accepted',
+                      'update completed','containment requested'):
+            with self.subTest(stage=stage):
+                clients=self.clients(); c=clients[2]
+                error=ClientError({'Error':{'Code':'ThrottlingException','Message':'sensitive-canary'}}, 'hidden')
+                if stage=='configuration prepared':
+                    original=c.list_services.side_effect
+                    c.list_services.side_effect=lambda **kw: (_ for _ in ()).throw(error) if c.describe_service.called else original(**kw)
+                elif stage in ('resume requested','update accepted'):
+                    original=c.list_operations.side_effect; raised=[False]
+                    def poll(**kw):
+                        triggered=c.resume_service.called if stage=='resume requested' else c.update_service.called
+                        if triggered and not raised[0]: raised[0]=True; raise error
+                        return original(**kw)
+                    c.list_operations.side_effect=poll
+                elif stage=='update completed':
+                    original=c.describe_service.side_effect
+                    c.describe_service.side_effect=lambda **kw: (_ for _ in ()).throw(error) if c.update_service.called else original(**kw)
+                else: c.pause_service.side_effect=error
+                lines=self.run_case(clients, health=lambda: stage!='containment requested')
+                self.assertIn('failure: stage='+stage+' code=ThrottlingException',lines)
+                self.assertNotIn('sensitive-canary','\n'.join(lines))
+                for name in ('resume','update','pause'):
+                    self.assertLessEqual(getattr(c,name+'_service').call_count,1)
+
+    def test_unknown_errors_and_invalid_ids_do_not_escape(self):
+        from botocore.exceptions import ClientError
+        d=adapter.core.Diagnostics()
+        d.stage('sensitive-canary')
+        d.operation('resume','sensitive-canary')
+        d.failure(ClientError({'Error':{'Code':'sensitive-canary','Message':'sensitive-canary'}},'hidden'))
+        d.failure(RuntimeError('sensitive-canary'))
+        self.assertEqual(d.lines, ['operation: resume id=unavailable',
+            'failure: stage=preflight code=aws_error_unlisted',
+            'failure: stage=preflight code=unexpected_error'])
+
+    def test_health_failure_reports_pause_id_and_completed_containment(self):
+        clients=self.clients()
+        lines=self.run_case(clients,health=Mock(side_effect=RuntimeError('sensitive-canary')))
+        self.assertIn('failure: stage=update completed code=unexpected_error',lines)
+        self.assertIn('operation: pause id='+self.ids['pause'],lines)
+        self.assertIn('stage: containment completed',lines)
+        self.assertNotIn('stage: health verified',lines)
+        self.assertNotIn('sensitive-canary','\n'.join(lines))
+        clients[2].pause_service.assert_called_once()
+
+    def test_cli_aws_failure_output_contains_only_safe_diagnostics(self):
+        from botocore.exceptions import ClientError
+        clients=self.clients(); clock=core_tests.Clock(); original_execute=adapter.execute
+        clients[2].update_service.side_effect=ClientError(
+            {'Error': {'Code':'InvalidRequestException', 'Message':'secret-message-canary'},
+             'payload': {'AUTH_SECRET_KEY':'fresh-key-canary','DATABASE_URL':'synthetic-db-canary'}},
+            'secret-operation-canary')
+        def offline(*args, **kwargs):
+            return original_execute(*args, **kwargs, clock=clock, sleep=clock.sleep)
+        output=io.StringIO()
+        with patch.object(adapter,'execute',side_effect=offline), \
+             patch.object(adapter.resource,'setrlimit'), \
+             patch.object(adapter.faulthandler,'disable'), \
+             patch.object(adapter.logging,'disable'), \
+             patch.object(adapter.core.secrets,'token_urlsafe',return_value='fresh-key-canary'):
+            with contextlib.redirect_stdout(output),contextlib.redirect_stderr(output):
+                code=adapter.main(['--execute-approved-cutover'],client_factory=lambda:clients)
+        text=output.getvalue()
+        self.assertEqual(code,1)
+        self.assertIn('failure: stage=update requested code=InvalidRequestException',text)
+        self.assertIn('operation: resume id='+self.ids['resume'],text)
+        self.assertIn('operation: pause id='+self.ids['pause'],text)
+        self.assertIn('stage: containment unconfirmed',text)
+        for forbidden in ('canary','Traceback','AUTH_SECRET_KEY','DATABASE_URL','payload'):
+            self.assertNotIn(forbidden,text)
+        clients[2].resume_service.assert_called_once()
+        clients[2].update_service.assert_called_once()
+        clients[2].pause_service.assert_called_once()
