@@ -70,6 +70,14 @@ jobs:
       run: |
         alembic current
 
+    - name: Install PostgreSQL 16 server binaries for isolated tests
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends postgresql-16
+        for binary in initdb pg_ctl postgres; do
+          test -x "/usr/lib/postgresql/16/bin/$binary"
+        done
+
     - name: Run full test suite with coverage
       working-directory: ./backend
       run: |
