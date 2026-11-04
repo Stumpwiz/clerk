@@ -1,0 +1,68 @@
+CLERK FRONTEND CUTOVER — LOCAL PREPARATION ONLY
+
+Target: account 365591166807, us-east-1, IAM user twin.
+Service: arn:aws:apprunner:us-east-1:365591166807:service/clerk-frontend/7d7f42151edb48fb87d706a4cceb2e4a
+Replacement: 365591166807.dkr.ecr.us-east-1.amazonaws.com/clerk-frontend@sha256:41e28cb7e92a9f65aa62be9b55d81dfda66f778f7bb958e25cea21cb47e6a5db
+
+Before execution, review this local package and obtain separate explicit production
+authorization for exactly one attempt, in-memory DescribeService reads, temporary
+old-frontend exposure, the image update, inert HTTPS verification, and failure pause.
+Verify the approved checkout and clean state at that time. Do not execute now.
+
+Later authorized command, from /home/geo/Projects/Python/clerk:
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python scripts/execute_frontend_cutover.py --execute-approved-cutover
+Without the flag (including --help), no clients or network calls are made.
+
+1. Confirm exact twin identity/account; frontend PAUSED and all operations terminal;
+   approved ECR digest exists. Fail closed on API errors, unexpected states or timeouts.
+2. Read only the frontend configuration into process memory under output suppression.
+   Require exact service identity, manual deployment, ECR source at clerk-frontend:latest
+   and existing ECR access role. Stop on drift. The backend is never inspected or changed.
+3. Deep-copy SourceConfiguration, change only ImageIdentifier, validate the complete
+   UpdateService request with the local Botocore model before resume. Preserve every
+   runtime variable, secret reference, image port/start command, and authentication role.
+   Omit unrelated top-level settings so they are preserved. No keys are generated.
+4. Recheck PAUSED and idle; submit one resume, await success and RUNNING, immediately
+   submit one UpdateService. No StartDeployment and no automatic mutation retries.
+5. Await update success; verify RUNNING and exact intended source configuration plus
+   unchanged networking, instance, health, scaling, observability, and encryption settings.
+6. GET https://clerk.mrrc.online/local-login with verified TLS, no redirects/proxies,
+   cookies, credentials or form submission. Require HTTP 200, text/html, same URL,
+   <=1 MiB strict UTF-8 HTML, expected login form and local Next.js script references.
+   Reject the recorded JavaScript data-URL loader, eval(atob(...)), eth_call and BNB
+   testnet indicators. Parse only in memory; never execute/decode scripts or fetch assets,
+   payloads, RPC endpoints or backend data. Never save/print response bodies.
+7. On post-resume failure, allow the executor's containment to finish: wait for known
+   operations to settle, issue at most one pause when RUNNING and idle, verify its success
+   and PAUSED with no pending operation. Ambiguous mutation responses remain UNCONFIRMED
+   even if a later pause succeeds. Never retry or repair manually without fresh approval.
+
+Reuse: frontend_cutover imports the backend core's inert diagnostics, error type,
+pagination and monotonic deadline checks. Service-bound polling/restoration/containment
+are narrowly adapted copies to avoid changing backend code or creating a generic deployer.
+The backend executor is never invoked. No backend/database/identity mutations are present.
+
+Bounds: 60s preflight after STS, 15 minutes per resume/update, separate 15-minute
+containment deadline; shared deadlines across pagination. SDK connect/read timeouts
+5s/15s and total_max_attempts=1. HTTPS has 5s I/O timeout and a 60s wall-clock alarm;
+only transient HTTP checks repeat within that deadline. A suspect 200 fails immediately.
+No concurrent external service mutations are permitted during execution.
+
+Permissions: STS GetCallerIdentity; ECR DescribeImages for clerk-frontend; App Runner
+ListServices, ListOperations, DescribeService, ResumeService, UpdateService, PauseService;
+iam:PassRole for the preserved ECR access role. The installed backend-named PassRole
+policy is role-scoped, so it may also cover frontend if it uses that same role. Verify
+this at a separately authorized preflight; no live role/configuration claims made here.
+
+Risks: resume temporarily exposes the old frontend, including any repeated injection.
+Failed updates can roll back; containment may time out. A killed executor cannot contain.
+Inert HTML inspection checks selected indicators only; it does not prove absence of
+malware, inspect external script contents, revoke cached pages, or test authentication.
+Only the primary hostname is checked. Runtime configuration is preserved verbatim;
+the approved image's build-time API URL is not changed or independently revalidated.
+DNS/TLS, IAM and current frontend configuration remain unverified during local preparation.
+
+Validation (offline, synthetic clients/HTTP only):
+PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m unittest discover -s scripts/tests -p 'test_frontend_cutover.py' -v
+Exit 0 from the live executor means operation/configuration/login HTML checks passed.
+Exit 1 requires reading the fixed failure/containment result; never retry automatically.
