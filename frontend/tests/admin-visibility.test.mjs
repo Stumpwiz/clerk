@@ -20,6 +20,7 @@ function harness(file, user, reply, exportName = 'default', options = {}) {
     const fullRedirects = [];
     const router = {replace: path => redirects.push(path), refresh() {}};
     const context = React.createContext(null);
+    const updateContext = React.createContext(() => {});
     let authRequests = 0;
     const slots = [], effects = [], requests = [];
     const same = (a, b) => a && b && a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
@@ -48,7 +49,7 @@ function harness(file, user, reply, exportName = 'default', options = {}) {
     const stub = () => null;
     function mockedRequire(name) {
         if (name === 'react') return hooks;
-        if (name === '@/lib/current-user') return {useCurrentUser: () => current, CurrentUserContext: context};
+        if (name === '@/lib/current-user') return {useCurrentUser: () => current, CurrentUserContext: context, UpdateCurrentUserContext: updateContext, useUpdateCurrentUser: () => updated => { current = updated; }};
         if (name === '@/lib/auth') return {getCurrentUser: async () => { authRequests++; return options.getCurrentUser ? options.getCurrentUser() : current; }};
         if (name === 'next/link') return {__esModule: true, default: ({children, href}) => React.createElement('a', {href}, children)};
         if (name === 'next/image') return {__esModule: true, default: stub};
@@ -68,7 +69,7 @@ function harness(file, user, reply, exportName = 'default', options = {}) {
     }, {filename: file});
     const tree = () => { index = 0; return compiledModule.exports[exportName]({user: current, children: options.children}); };
     const render = () => renderToStaticMarkup(tree());
-    return {render, tree, context, requests, redirects, fullRedirects, get authRequests() { return authRequests; },
+    return {render, tree, context, updateContext, requests, redirects, fullRedirects, get authRequests() { return authRequests; },
         setPath(path) { pathname = path; }, setUser(user) { current = user; }, async settle() {
         for (let i = 0; i < 5; i++) {
             const html = render(), pending = effects.splice(0);
@@ -274,4 +275,17 @@ test('login shows password confirmation only for the success flag', () => {
     assert.match(html, /role="status"/);
     assert.match(html, /Password changed. Please sign in again./);
     assert.match(html, /type="password"/);
+});
+
+test('avatar mutation updates shell navigation immediately and refuses other user identity', async () => {
+    const Navigation = ({user}) => React.createElement('span', null, user.avatar_path || 'fallback');
+    const shell = harness('components/authenticated-shell.tsx', ordinary, null, 'AuthenticatedShell', {Navigation});
+    await shell.settle();
+    const provider = findElement(shell.tree(), node => node.type === shell.updateContext.Provider);
+    provider.props.value({...ordinary, avatar_path: '/api/avatars/new.png'});
+    assert.match(shell.render(), /\/api\/avatars\/new.png/);
+    provider.props.value({...ordinary, id: 999, avatar_path: '/wrong.png'});
+    assert.doesNotMatch(shell.render(), /wrong.png/);
+    provider.props.value({...ordinary, avatar_path: null});
+    assert.match(shell.render(), /fallback/);
 });

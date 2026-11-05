@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from app.auth.origin import configure_origin_protection
 
 from app.config import settings
+from app.routers import avatars
 
 # Import routers
 from app.routers import auth, bodies, offices, persons, terms, letters, reports, users, mailing_lists, help
@@ -64,6 +65,7 @@ configure_origin_protection(app, settings.cors_origins)
 
 # Include routers
 app.include_router(auth.router)
+app.include_router(avatars.router)
 app.include_router(bodies.router)
 app.include_router(offices.router)
 app.include_router(persons.router)

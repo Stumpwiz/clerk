@@ -1,5 +1,6 @@
 "use client";
 
+import {Avatar} from "./avatar";
 import {LogOut} from "lucide-react";
 import {useRouter} from "next/navigation";
 import {useState} from "react";
@@ -11,9 +12,6 @@ interface LocalUserMenuProps {
     variant?: "default" | "compact";
 }
 
-function avatarSrc(user: LocalUser): string {
-    return user.avatar_path || "/logo.svg";
-}
 
 export function LocalUserMenu({user, variant = "default"}: LocalUserMenuProps) {
     const router = useRouter();
@@ -38,9 +36,7 @@ export function LocalUserMenu({user, variant = "default"}: LocalUserMenuProps) {
         return (
             <div className="flex min-w-0 items-center gap-2">
                 <div className="flex min-w-0 items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-2 py-1.5 shadow-sm">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                        src={avatarSrc(user)}
+                <Avatar userId={user.id} path={user.avatar_path}
                         alt=""
                         className="h-8 w-8 flex-shrink-0 rounded-full border border-gray-200 bg-white object-cover"
                     />
@@ -70,9 +66,7 @@ export function LocalUserMenu({user, variant = "default"}: LocalUserMenuProps) {
     return (
         <div className="flex flex-col gap-3">
             <div className="flex items-center gap-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                    src={avatarSrc(user)}
+                <Avatar userId={user.id} path={user.avatar_path}
                     alt=""
                     className="h-11 w-11 rounded-full border border-gray-200 bg-white object-cover"
                 />

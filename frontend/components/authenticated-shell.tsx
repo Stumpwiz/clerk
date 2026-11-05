@@ -6,7 +6,7 @@ import {Loader2} from "lucide-react";
 import {Navigation} from "@/components/navigation";
 import type {LocalUser} from "@/lib/auth";
 import {getCurrentUser} from "@/lib/auth";
-import {CurrentUserContext} from "@/lib/current-user";
+import {CurrentUserContext, UpdateCurrentUserContext} from "@/lib/current-user";
 
 interface AuthenticatedShellProps {
     children: React.ReactNode;
@@ -78,7 +78,9 @@ export function AuthenticatedShell({children}: AuthenticatedShellProps) {
                     </div>
                 )}
                 <CurrentUserContext.Provider value={user}>
-                    {children}
+                    <UpdateCurrentUserContext.Provider value={updated => setUser(current => current?.id === updated.id ? updated : current)}>
+                        {children}
+                    </UpdateCurrentUserContext.Provider>
                 </CurrentUserContext.Provider>
             </main>
         </div>

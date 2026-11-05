@@ -1,6 +1,8 @@
 # app/models/user.py - Local application user for authentication
 
 from sqlalchemy import Boolean, Column, DateTime, Index, Integer, String, Text, UniqueConstraint, false, func
+from sqlalchemy import LargeBinary
+from sqlalchemy.orm import deferred
 from app.database import Base
 
 
@@ -17,6 +19,7 @@ class User(Base):
     session_version = Column(Integer, nullable=False, default=0, server_default="0")
     display_name = Column(String(255), nullable=False)
     avatar_path = Column(Text, nullable=True, default=None)
+    avatar_bytes = deferred(Column(LargeBinary, nullable=True))
     is_active = Column(Boolean, nullable=False, server_default="true", default=True)
     is_admin = Column(Boolean, nullable=False, server_default=false(), default=False)
     last_login_at = Column(DateTime(timezone=True), nullable=True, default=None)
