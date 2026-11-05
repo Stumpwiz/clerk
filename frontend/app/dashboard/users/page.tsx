@@ -381,7 +381,7 @@ export default function UsersPage() {
     };
 
     if (accessDenied || (currentUser && currentUser.is_admin !== true)) {
-        return <div role="alert" className="px-4 py-6">Access denied. Administrator access is required.</div>;
+        return <div role="alert" className="px-4 py-6 text-gray-900">Access denied. Administrator access is required.</div>;
     }
 
     if (!currentUser || loading) {
