@@ -1,8 +1,8 @@
 'use client';
 
-import {useEffect, useState} from "react";
-import type {LocalUser} from "@/lib/auth";
-import {getCurrentUser} from "@/lib/auth";
+import {useState} from "react";
+import {useCurrentUser, useUpdateCurrentUser} from "@/lib/current-user";
+import {AvatarManager} from "@/components/avatar-manager";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
 
@@ -35,27 +35,14 @@ function getApiErrorMessage(errorBody: unknown, fallback: string) {
 }
 
 export default function ProfilePage() {
-    const [user, setUser] = useState<LocalUser | null>(null);
+    const currentUser = useCurrentUser();
+    const [passwordChanged, setPasswordChanged] = useState(false);
+    const user = passwordChanged ? null : currentUser;
+    const updateUser = useUpdateCurrentUser();
     const [passwordForm, setPasswordForm] = useState<PasswordFormData>(emptyPasswordForm);
     const [passwordError, setPasswordError] = useState<string | null>(null);
     const [submittingPassword, setSubmittingPassword] = useState(false);
 
-    useEffect(() => {
-        let isMounted = true;
-
-        async function loadCurrentUser() {
-            const currentUser = await getCurrentUser();
-            if (isMounted) {
-                setUser(currentUser);
-            }
-        }
-
-        loadCurrentUser();
-
-        return () => {
-            isMounted = false;
-        };
-    }, []);
 
     const handlePasswordSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -97,7 +84,7 @@ export default function ProfilePage() {
             }
 
             setPasswordForm(emptyPasswordForm);
-            setUser(null);
+            setPasswordChanged(true);
             // A full navigation discards the shell's cached user and router state.
             window.location.replace("/local-login?passwordChanged=1");
         } catch (error) {
@@ -115,6 +102,8 @@ export default function ProfilePage() {
                     View your local account details.
                 </p>
             </div>
+
+            {user && <AvatarManager key={user.id} user={user} onUpdate={updateUser}/>}
 
             <div className="bg-white shadow rounded-lg p-6">
                 {user ? (

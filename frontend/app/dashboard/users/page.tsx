@@ -1,7 +1,8 @@
 'use client';
 
+import {Avatar} from "@/components/avatar";
 import {useState, useEffect, useCallback} from 'react';
-import {Loader2, Mail, Calendar, User as UserIcon, Plus, Edit2, KeyRound, Trash2} from 'lucide-react';
+import {Loader2, Mail, Calendar, Plus, Edit2, KeyRound, Trash2} from 'lucide-react';
 import {Modal} from '@/components/modal';
 import {Toast} from '@/components/toast';
 import {getCurrentUser} from '@/lib/auth';
@@ -380,7 +381,7 @@ export default function UsersPage() {
     };
 
     if (accessDenied || (currentUser && currentUser.is_admin !== true)) {
-        return <div role="alert" className="px-4 py-6">Access denied. Administrator access is required.</div>;
+        return <div role="alert" className="px-4 py-6 text-gray-900">Access denied. Administrator access is required.</div>;
     }
 
     if (!currentUser || loading) {
@@ -457,18 +458,7 @@ export default function UsersPage() {
                                 <tr key={user.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="flex items-center">
-                                            {user.avatar_path ? (
-                                                <img
-                                                    src={user.avatar_path}
-                                                    alt=""
-                                                    className="h-10 w-10 rounded-full"
-                                                />
-                                            ) : (
-                                                <div
-                                                    className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                                                    <UserIcon className="h-6 w-6 text-blue-600"/>
-                                                </div>
-                                            )}
+                                            <Avatar userId={user.id} path={user.avatar_path} className="h-10 w-10 rounded-full object-cover"/>
                                             <div className="ml-4">
                                                 <div className="text-sm font-medium text-gray-900">
                                                     {user.display_name}

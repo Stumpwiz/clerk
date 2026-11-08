@@ -119,8 +119,8 @@ def test_migration_preserves_users_and_postgresql_ddl():
     config = Config()
     config.set_main_option('script_location', str(backend / 'alembic'))
     scripts = ScriptDirectory.from_config(config)
-    assert scripts.get_heads() == ['d82f6a9b3104']
-    migration = scripts.get_revision('head').module
+    assert scripts.get_heads() == ['e93a7b2c4105']
+    migration = scripts.get_revision('d82f6a9b3104').module
     assert migration.down_revision == 'c61d8e4a2b90'
     output = io.StringIO()
     context = MigrationContext.configure(dialect_name='postgresql', opts={'as_sql': True, 'output_buffer': output})

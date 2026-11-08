@@ -35,3 +35,6 @@ pytest-asyncio==0.21.1
 pytest-cov==4.1.0
 httpx==0.25.2
 docker==7.1.0
+
+# Avatar decoding and normalization
+Pillow==12.2.0
