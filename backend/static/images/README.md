@@ -6,7 +6,7 @@ Council president: residents automatically belong to the Association.
 
 The JPEG was extracted without recompression from the approved, preserved
 `residentAssociationLogoSmall.pdf` using `pdfimages -j`. It is 980 × 303 RGB
-pixels. Preserve the source PDF and the original `residentCouncilLogoSmall.jpg`.
+pixels. The original source PDF is tracked alongside the runtime JPEG.
 
 Reports stage the Association JPEG in their output directory; letters stage it
 in their temporary compilation directory. Templates name the Association asset,
