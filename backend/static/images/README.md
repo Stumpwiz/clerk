@@ -1,14 +1,18 @@
-# Static Images Directory
+# Document logos
 
-This directory contains static images used in letter generation and other features.
+`residentAssociationLogoSmall.jpg` is the Residents Association logo used by all
+five roster-report templates and welcome letters. Letters remain signed by the
+Council president: residents automatically belong to the Association.
 
-## Required Files
+The JPEG was extracted without recompression from the approved, preserved
+`residentAssociationLogoSmall.pdf` using `pdfimages -j`. It is 980 × 303 RGB
+pixels. Preserve the source PDF and the original `residentCouncilLogoSmall.jpg`.
 
-### residentCouncilLogoSmall.jpg
+Reports stage the Association JPEG in their output directory; letters stage it
+in their temporary compilation directory. Templates name the Association asset,
+so previously staged Council files cannot select the old artwork. Reports use
+the source PDF's 235-point width; letters retain their explicit 2.25-inch width.
 
-- **Purpose**: Logo image used in welcome letters
-- **Location**: `backend/static/images/residentCouncilLogoSmall.jpg`
-- **Referenced in**: LaTeX letter templates
-- **LaTeX path**: `../static/images/residentCouncilLogoSmall.jpg` (relative to `backend/files_letters/`)
-
-To add the logo, copy it from the prototype:
+Asset changes require a backend image rebuild and deployment. Existing generated
+or published PDFs are not automatically rewritten. Validate with synthetic data
+and IONOS publishing disabled unless publication is explicitly authorized.

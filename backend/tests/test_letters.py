@@ -44,7 +44,7 @@ def context(pg_session, monkeypatch, tmp_path):
     def compile_pdf(*args, **kwargs):
         work = Path(kwargs['cwd'])
         workspaces.append(work)
-        assert (work / 'residentCouncilLogoSmall.jpg').exists()
+        assert (work / 'residentAssociationLogoSmall.jpg').exists()
         (work / 'letter.pdf').write_bytes(PDF)
         return SimpleNamespace(returncode=0)
 

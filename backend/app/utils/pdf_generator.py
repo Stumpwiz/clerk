@@ -91,8 +91,8 @@ class PDFGenerator:
                 aux_file.unlink()
 
         # Ensure required assets are staged in the report directory
-        logo_source = BACKEND_ROOT / "static" / "images" / "residentCouncilLogoSmall.jpg"
-        logo_target = self.reports_dir / "residentCouncilLogoSmall.jpg"
+        logo_source = BACKEND_ROOT / "static" / "images" / "residentAssociationLogoSmall.jpg"
+        logo_target = self.reports_dir / "residentAssociationLogoSmall.jpg"
 
         # Verify logo source exists
         if not logo_source.exists():
@@ -102,7 +102,7 @@ class PDFGenerator:
             )
             raise HTTPException(
                 status_code=500,
-                detail="Required report asset 'residentCouncilLogoSmall.jpg' not found."
+                detail="Required report asset 'residentAssociationLogoSmall.jpg' not found."
             )
 
         # Copy logo to report directory if not already present

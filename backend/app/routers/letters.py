@@ -182,7 +182,7 @@ def build_latex_document(
 
 \\vspace*{{{logo_top_offset_in}in}}
 \\begin{{center}}
-    \\includegraphics[width={logo_width_in}in]{{residentCouncilLogoSmall.jpg}} \\\\[0.5em]
+    \\includegraphics[width={logo_width_in}in]{{residentAssociationLogoSmall.jpg}} \\\\[0.5em]
 \\end{{center}}
 
 \\vspace{{0.6em}}
@@ -313,8 +313,8 @@ def generate_letter(
             # A fixed working name avoids user-controlled paths and LaTeX arguments.
             tex_file = work / "letter.tex"
             tex_file.write_text(tex_content, encoding="utf-8")
-            shutil.copyfile(STATIC_IMAGES_DIR / "residentCouncilLogoSmall.jpg",
-                            work / "residentCouncilLogoSmall.jpg")
+            shutil.copyfile(STATIC_IMAGES_DIR / "residentAssociationLogoSmall.jpg",
+                            work / "residentAssociationLogoSmall.jpg")
             for _ in range(2):
                 result = subprocess.run(
                     ["xelatex", "-interaction=nonstopmode", "-halt-on-error",
