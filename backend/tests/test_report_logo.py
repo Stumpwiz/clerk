@@ -2,6 +2,7 @@
 from types import SimpleNamespace
 
 import pytest
+from starlette.exceptions import HTTPException
 
 from app.utils import pdf_generator
 
@@ -31,5 +32,10 @@ def test_association_logo_with_old_council_asset(tmp_path, monkeypatch, kind):
 def test_missing_association_logo(tmp_path, monkeypatch):
     monkeypatch.setattr(pdf_generator, 'BACKEND_ROOT', tmp_path)
     generator = pdf_generator.PDFGenerator(str(tmp_path))
-    with pytest.raises(pdf_generator.HTTPException, match='residentAssociationLogoSmall.jpg'):
+    with pytest.raises(pdf_generator.HTTPException) as exc:
         generator.generate_pdf('sfr_template.tex', 'report', {'grouped': {}})
+    error = exc.value
+    assert isinstance(error, HTTPException)
+    assert error.status_code == 500
+    assert isinstance(error.detail, str)
+    assert 'residentAssociationLogoSmall.jpg' in error.detail

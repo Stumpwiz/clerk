@@ -81,7 +81,7 @@ jobs:
     - name: Run full test suite with coverage
       working-directory: ./backend
       run: |
-        pytest tests/ -v --tb=short --cov=app --cov-report=term-missing --cov-report=html
+        pytest tests/ -q --tb=short --cov=app --cov-report=term-missing --cov-report=html
 
     - name: Upload coverage report
       uses: actions/upload-artifact@v4

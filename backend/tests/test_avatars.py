@@ -82,7 +82,7 @@ def test_formats_persistence_deferred_and_replacement(context, fmt):
     (picture("GIF"), 415), (picture()[:40], 415),
     (b"x" * (MAX_UPLOAD_BYTES + 1), 413),
     (picture(size=(4001, 4000)), 413),
-])
+], ids=["empty", "invalid", "svg", "gif", "truncated", "oversize-upload", "oversize-dimensions"])
 def test_rejection_preserves_previous(context, data, status):
     client, db, owner, _, _ = context
     previous = upload(client).json()["avatar_path"]
